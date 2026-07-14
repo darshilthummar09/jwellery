@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu, X } from "lucide-react";
 import { NAV_LINKS } from "../../data/site";
@@ -24,12 +25,13 @@ export function Navbar({ menuOpen, setMenuOpen }: { menuOpen: boolean; setMenuOp
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
-      <a href="#top" className="flex items-center gap-3" aria-label="Dream Jewels — back to top">
-        <DiamondSVG style={{ width: 32, height: 32 }} />
-        <div>
-          <div className="font-['Cinzel'] text-lg font-bold tracking-widest text-accent leading-none">Dream</div>
-          <div className="font-['Cinzel'] text-xs tracking-[0.35em] text-primary-foreground/60 leading-none mt-0.5">JEWELS</div>
-        </div>
+      <a href="#top" className="flex items-center" aria-label="Dream Jewels — back to top">
+        <img
+          src="/logo.png"
+          alt="Dream Jewels"
+          className="h-8 w-auto object-contain transition-all duration-300"
+          style={{ filter: "invert(1) brightness(100)" }}
+        />
       </a>
 
       <div className="hidden md:flex items-center gap-10">
@@ -44,7 +46,13 @@ export function Navbar({ menuOpen, setMenuOpen }: { menuOpen: boolean; setMenuOp
         ))}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden md:flex items-center gap-6">
+        <Link
+          to="/login"
+          className="inline-block font-['Raleway'] text-xs tracking-[0.2em] uppercase text-foreground hover:text-accent transition-colors duration-300"
+        >
+          Log In
+        </Link>
         <a
           href="#contact"
           className="inline-block font-['Raleway'] text-xs tracking-[0.2em] uppercase px-6 py-2.5 border border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300"
@@ -97,6 +105,20 @@ export function MobileMenu({ menuOpen, setMenuOpen }: { menuOpen: boolean; setMe
               {item}
             </motion.a>
           ))}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, delay: 0.05 * NAV_LINKS.length }}
+          >
+            <Link
+              to="/login"
+              onClick={() => setMenuOpen(false)}
+              className="font-['Cinzel'] text-3xl text-accent hover:text-white transition-colors"
+            >
+              Log In
+            </Link>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
