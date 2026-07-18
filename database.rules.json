@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "chatState": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
