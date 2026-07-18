@@ -1,15 +1,9 @@
 import { Plus, Tag } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
+import { EmptyState } from '../../components/common/EmptyState';
 
-const CATEGORIES = [
-  { name: 'Rings',      count: 124, icon: '💍', color: 'bg-pink-50 text-pink-600 border-pink-200' },
-  { name: 'Necklaces',  count: 86,  icon: '📿', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-  { name: 'Earrings',   count: 210, icon: '✨', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-  { name: 'Bracelets',  count: 73,  icon: '🔱', color: 'bg-amber-50 text-amber-600 border-amber-200' },
-  { name: 'Bangles',    count: 95,  icon: '⭕', color: 'bg-orange-50 text-orange-600 border-orange-200' },
-  { name: 'Pendants',   count: 54,  icon: '💎', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-];
+const CATEGORIES: Array<{ name: string; count: number; icon: string; color: string }> = [];
 
 export function CategoriesPage() {
   return (
@@ -25,21 +19,27 @@ export function CategoriesPage() {
           </button>
         }
       />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {CATEGORIES.map((cat) => (
-          <div
-            key={cat.name}
-            className={`bg-white rounded-2xl border ${cat.color.split(' ')[2]} p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group`}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-3xl">{cat.icon}</span>
-              <Tag size={16} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+      {CATEGORIES.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
+          <EmptyState title="No categories yet" description="Add a category to start organising products." />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {CATEGORIES.map((cat) => (
+            <div
+              key={cat.name}
+              className={`bg-white rounded-2xl border ${cat.color.split(' ')[2]} p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-3xl">{cat.icon}</span>
+                <Tag size={16} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+              </div>
+              <h3 className="text-base font-semibold text-slate-800 mb-1">{cat.name}</h3>
+              <p className="text-sm text-slate-500">{cat.count} products</p>
             </div>
-            <h3 className="text-base font-semibold text-slate-800 mb-1">{cat.name}</h3>
-            <p className="text-sm text-slate-500">{cat.count} products</p>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </PageContainer>
   );
 }

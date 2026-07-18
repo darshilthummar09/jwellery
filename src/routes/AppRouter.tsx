@@ -31,6 +31,7 @@ import { CustomerNotificationsPage } from '../pages/customer/NotificationsPage';
 // Designer Pages
 import { DesignerDashboard } from '../pages/designer/DesignerDashboard';
 import { AssignedProjectsPage } from '../pages/designer/AssignedProjectsPage';
+import { DesignerChatPage } from '../pages/designer/DesignerChatPage';
 import { DesignerNotificationsPage } from '../pages/designer/NotificationsPage';
 
 // Utility Pages
@@ -92,6 +93,7 @@ export function AppRouter() {
               <Route element={<RoleRoute allowedRoles={['designer']} />}>
                 <Route path="/dashboard/designer" element={<DesignerDashboard />} />
                 <Route path="/dashboard/designer/assigned-projects" element={<AssignedProjectsPage />} />
+                <Route path="/dashboard/designer/chat" element={<DesignerChatPage />} />
                 <Route path="/dashboard/designer/notifications" element={<DesignerNotificationsPage />} />
               </Route>
 

@@ -3,7 +3,21 @@ import { useNavigate, useLocation } from 'react-router';
 import { Eye, EyeOff, Gem, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLE_DASHBOARD_PATH } from '../../constants/navigation';
+import { UserRole } from '../../types/role.types';
 import { MOCK_USERS } from '../../data/mock-users';
+
+function getSafePostLoginPath(role: UserRole, attemptedPath?: string): string {
+  const roleDashboardPath = ROLE_DASHBOARD_PATH[role];
+
+  if (
+    attemptedPath &&
+    (attemptedPath === roleDashboardPath || attemptedPath.startsWith(`${roleDashboardPath}/`))
+  ) {
+    return attemptedPath;
+  }
+
+  return roleDashboardPath;
+}
 
 export function LoginPage() {
   const { login, isAuthenticated, user } = useAuth();
@@ -20,8 +34,7 @@ export function LoginPage() {
   // Already logged in → redirect to dashboard
   useEffect(() => {
     if (isAuthenticated && user) {
-      const dest = from || ROLE_DASHBOARD_PATH[user.role];
-      navigate(dest, { replace: true });
+      navigate(getSafePostLoginPath(user.role, from), { replace: true });
     }
   }, [isAuthenticated, user, navigate, from]);
 
@@ -38,7 +51,7 @@ export function LoginPage() {
     if (!result.success) {
       setError(result.error ?? 'Login failed.');
     } else if (result.user) {
-      navigate(ROLE_DASHBOARD_PATH[result.user.role], { replace: true });
+      navigate(getSafePostLoginPath(result.user.role, from), { replace: true });
     }
   };
 

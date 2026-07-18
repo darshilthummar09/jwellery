@@ -8,6 +8,7 @@ interface StatCardProps {
   trend?: { value: string; direction: 'up' | 'down' | 'neutral' };
   description?: string;
   color?: 'emerald' | 'blue' | 'purple' | 'orange' | 'rose';
+  onClick?: () => void;
 }
 
 const COLOR_MAP = {
@@ -31,12 +32,26 @@ export function StatCard({
   trend,
   description,
   color = 'emerald',
+  onClick,
 }: StatCardProps) {
   const c = COLOR_MAP[color];
   const TrendIcon = trend ? TREND_ICON[trend.direction].icon : null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+    <div
+      onClick={onClick}
+      className={`bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition-shadow ${
+        onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-100' : ''
+      }`}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (onClick && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className={`w-11 h-11 rounded-xl ${c.iconBg} flex items-center justify-center`}>
           <Icon size={20} className={c.icon} />

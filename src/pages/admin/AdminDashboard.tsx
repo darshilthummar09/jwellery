@@ -1,15 +1,11 @@
 import { Briefcase, Users, MessageSquare, TrendingUp, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { StatCard } from '../../components/common/StatCard';
 import { useAuth } from '../../hooks/useAuth';
 
-const RECENT_PROJECTS = [
-  { name: 'Patel Wedding Set',      customer: 'Priya Patel',    status: 'In Progress', designer: 'Riya Sharma',  due: '20 Jul' },
-  { name: 'Anniversary Ring',       customer: 'Anita Mehta',    status: 'Review',      designer: 'Dev Kumar',   due: '25 Jul' },
-  { name: 'Custom Necklace',        customer: 'Sunita Roy',     status: 'Design',      designer: 'Riya Sharma',  due: '01 Aug' },
-  { name: 'Diamond Earrings Set',   customer: 'Kavya Iyer',     status: 'Completed',   designer: 'Aryan Kapoor', due: '12 Jul' },
-];
+const RECENT_PROJECTS: Array<{ name: string; customer: string; status: string; designer: string; due: string }> = [];
 
 const STATUS_COLORS: Record<string, string> = {
   'In Progress': 'bg-blue-100 text-blue-700',
@@ -20,6 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function AdminDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <PageContainer>
@@ -30,17 +27,22 @@ export function AdminDashboard() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        <StatCard title="Active Projects" value="12"  icon={Briefcase}     trend={{ value: '+2', direction: 'up' }}      color="emerald" />
-        <StatCard title="Customers"       value="38"  icon={Users}         trend={{ value: '+5', direction: 'up' }}      color="blue"    />
-        <StatCard title="Designers"       value="6"   icon={TrendingUp}    trend={{ value: 'stable', direction: 'neutral' }} color="purple" />
-        <StatCard title="Open Chats"      value="9"   icon={MessageSquare} trend={{ value: '-3', direction: 'down' }}    color="orange"  />
+        <StatCard title="Active Projects" value="0" icon={Briefcase}     color="emerald" onClick={() => navigate('/dashboard/admin/projects')} />
+        <StatCard title="Customers"       value="1" icon={Users}         color="blue" onClick={() => navigate('/dashboard/admin/customers')} />
+        <StatCard title="Designers"       value="1" icon={TrendingUp}    color="purple" onClick={() => navigate('/dashboard/admin/designers')} />
+        <StatCard title="Open Chats"      value="0" icon={MessageSquare} color="orange" onClick={() => navigate('/dashboard/admin/chats')} />
       </div>
 
       {/* Recent Projects Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-800">Recent Projects</h2>
-          <span className="text-xs text-emerald-600 cursor-pointer hover:underline font-medium">View all projects</span>
+          <button
+            onClick={() => navigate('/dashboard/admin/projects')}
+            className="text-xs text-emerald-600 cursor-pointer hover:underline font-medium"
+          >
+            View all projects
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -55,7 +57,7 @@ export function AdminDashboard() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {RECENT_PROJECTS.map((p, i) => (
-                <tr key={i} className="hover:bg-slate-50/60 transition-colors">
+                <tr key={i} onClick={() => navigate('/dashboard/admin/projects')} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
                   <td className="px-6 py-4 font-medium text-slate-800">{p.name}</td>
                   <td className="px-6 py-4 text-slate-600">{p.customer}</td>
                   <td className="px-6 py-4 text-slate-600">{p.designer}</td>

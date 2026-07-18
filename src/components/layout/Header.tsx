@@ -15,14 +15,16 @@ interface HeaderProps {
 
 function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const { notifications, markAllNotificationsRead, markNotificationRead, getUnreadCount } = useChatNotification();
+  const { notifications, markAllNotificationsRead, markNotificationRead, getUnreadCount, getChatUnreadCount } = useChatNotification();
   const { role } = useRole();
   const navigate = useNavigate();
 
   // Map role to notification role
   const notifRole = role === 'super-admin' ? 'admin' : (role as 'customer' | 'admin' | 'designer') ?? 'admin';
   const myNotifications = notifications.filter((n) => n.role === notifRole).slice(0, 5);
-  const unreadCount = getUnreadCount(notifRole);
+  const notificationUnreadCount = getUnreadCount(notifRole);
+  const chatUnreadCount = getChatUnreadCount(notifRole);
+  const unreadCount = notificationUnreadCount + chatUnreadCount;
 
   const handleMarkAllRead = () => {
     markAllNotificationsRead(notifRole);
@@ -30,8 +32,16 @@ function NotificationBell() {
 
   const handleViewAll = () => {
     setOpen(false);
-    if (role === 'customer') navigate('/dashboard/customer/notifications');
+    if (role === 'admin') navigate('/dashboard/admin/chats');
+    else if (role === 'customer') navigate('/dashboard/customer/notifications');
     else if (role === 'designer') navigate('/dashboard/designer/notifications');
+  };
+
+  const handleOpenChats = () => {
+    setOpen(false);
+    if (role === 'admin') navigate('/dashboard/admin/chats');
+    else if (role === 'customer') navigate('/dashboard/customer/chat');
+    else if (role === 'designer') navigate('/dashboard/designer/chat');
   };
 
   return (
@@ -72,7 +82,22 @@ function NotificationBell() {
               </button>
             </div>
             <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
-              {myNotifications.length === 0 ? (
+              {chatUnreadCount > 0 && (
+                <div
+                  onClick={handleOpenChats}
+                  className="px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <span className="mt-1.5 w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">Unread chat messages</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {chatUnreadCount} message{chatUnreadCount === 1 ? '' : 's'} waiting in chat.
+                    </p>
+                    <p className="text-[10px] text-slate-300 mt-0.5">Just now</p>
+                  </div>
+                </div>
+              )}
+              {myNotifications.length === 0 && chatUnreadCount === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-slate-400">No notifications</div>
               ) : (
                 myNotifications.map((n) => (

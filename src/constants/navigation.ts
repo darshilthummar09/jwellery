@@ -33,6 +33,7 @@ export const CUSTOMER_NAV: NavItem[] = [
 export const DESIGNER_NAV: NavItem[] = [
   { label: 'Dashboard',          path: '/dashboard/designer',                     icon: 'LayoutDashboard', description: 'Your overview' },
   { label: 'Assigned Projects',  path: '/dashboard/designer/assigned-projects',   icon: 'ClipboardList',   description: 'Projects assigned to you' },
+  { label: 'Admin Chat',         path: '/dashboard/designer/chat',                icon: 'MessageSquare',   description: 'Chat with admin' },
   { label: 'Notifications',      path: '/dashboard/designer/notifications',        icon: 'Bell',            description: 'Your notifications' },
 ];
 

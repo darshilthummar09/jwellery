@@ -11,6 +11,7 @@ import { ROLE_NAV_MAP } from '../../constants/navigation';
 import { NavItem } from '../../constants/navigation';
 import { RoleBadge } from '../common/Badge';
 import { Avatar } from '../common/Avatar';
+import { useChatNotification } from '../../context/ChatNotificationContext';
 
 // Map icon name strings to Lucide icon components
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -24,7 +25,7 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+function NavItemLink({ item, collapsed, badgeCount = 0 }: { item: NavItem; collapsed: boolean; badgeCount?: number }) {
   const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
 
   return (
@@ -32,7 +33,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
       to={item.path}
       end={item.path.split('/').length <= 3}
       className={({ isActive }) =>
-        `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+        `group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
           isActive
             ? 'bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100'
             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -45,7 +46,19 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
         className="flex-shrink-0 transition-transform group-hover:scale-110"
       />
       {!collapsed && (
-        <span className="truncate">{item.label}</span>
+        <>
+          <span className="truncate">{item.label}</span>
+          {badgeCount > 0 && (
+            <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </span>
+          )}
+        </>
+      )}
+      {collapsed && badgeCount > 0 && (
+        <span className="absolute right-1 top-1 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+          {badgeCount > 9 ? '9+' : badgeCount}
+        </span>
       )}
     </NavLink>
   );
@@ -64,8 +77,10 @@ function SidebarContent({
 }) {
   const { user, logout } = useAuth();
   const { role } = useRole();
+  const { getChatUnreadCount } = useChatNotification();
   const navigate = useNavigate();
   const navItems = role ? ROLE_NAV_MAP[role] : [];
+  const chatUnreadCount = role ? getChatUnreadCount(role === 'super-admin' ? 'admin' : role) : 0;
 
   const handleLogout = () => {
     logout();
@@ -111,7 +126,12 @@ function SidebarContent({
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
-          <NavItemLink key={item.path} item={item} collapsed={collapsed && !isMobile} />
+          <NavItemLink
+            key={item.path}
+            item={item}
+            collapsed={collapsed && !isMobile}
+            badgeCount={item.path.includes('/chat') || item.path.includes('/chats') ? chatUnreadCount : 0}
+          />
         ))}
       </nav>
 
