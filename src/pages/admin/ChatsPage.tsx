@@ -80,7 +80,7 @@ function AttachmentList({ attachments, isAdmin }: { attachments: ChatAttachment[
 }
 
 export function ChatsPage() {
-  const { threads, sendAdminMessage, markThreadRead } = useChatNotification();
+  const { threads, sendAdminMessage, markThreadRead, deleteMessage } = useChatNotification();
   const [searchParams] = useSearchParams();
   const requestedThreadId = searchParams.get('thread');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
@@ -97,7 +97,7 @@ export function ChatsPage() {
     if (requestedThreadId && threads.some((thread) => thread.id === requestedThreadId)) {
       setSelectedThreadId(requestedThreadId);
     }
-  }, [requestedThreadId, threads]);
+  }, [requestedThreadId]);
 
   useEffect(() => {
     if (selectedThreadId) {
@@ -108,6 +108,11 @@ export function ChatsPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [selectedThread?.messages.length]);
+
+  const selectThread = (threadId: string) => {
+    setSelectedThreadId(threadId);
+    setSearchParams({ thread: threadId }, { replace: true });
+  };
 
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -159,7 +164,7 @@ export function ChatsPage() {
                 <button
                   key={thread.id}
                   type="button"
-                  onClick={() => setSelectedThreadId(thread.id)}
+                  onClick={() => selectThread(thread.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 transition-colors text-left ${
                     thread.id === selectedThreadId ? 'bg-emerald-50/50 border-l-2 border-l-emerald-500' : ''
                   }`}
@@ -245,19 +250,32 @@ export function ChatsPage() {
                       );
                     }
 
+                    const isDeletable = isAdmin;
+
                     return (
                       <div key={msg.id} className={`flex items-end gap-2 ${isAdmin ? 'flex-row-reverse' : ''}`}>
                         <Avatar user={{ name: isAdmin ? 'Support' : selectedThread.customerName }} size="xs" />
                         <div className={`max-w-[75%] flex flex-col gap-1 ${isAdmin ? 'items-end' : 'items-start'}`}>
-                          <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed space-y-3 ${
-                            isAdmin
-                              ? 'bg-emerald-600 text-white rounded-br-sm'
-                              : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm shadow-sm'
-                          }`}>
-                            {msg.text && <p>{msg.text}</p>}
-                            {msg.attachments && msg.attachments.length > 0 && (
-                              <AttachmentList attachments={msg.attachments} isAdmin={isAdmin} />
+                          <div className="flex items-center gap-2 group">
+                            {isDeletable && (
+                              <button 
+                                onClick={() => deleteMessage(selectedThread.id, msg.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded text-red-500 hover:text-red-700 text-xs transition-opacity cursor-pointer order-last"
+                                title="Delete message"
+                              >
+                                Delete
+                              </button>
                             )}
+                            <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed space-y-3 ${
+                              isAdmin
+                                ? 'bg-emerald-600 text-white rounded-br-sm'
+                                : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm shadow-sm'
+                            }`}>
+                              {msg.text && <p>{msg.text}</p>}
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <AttachmentList attachments={msg.attachments} isAdmin={isAdmin} />
+                              )}
+                            </div>
                           </div>
                           <span className="text-[10px] text-slate-400 px-1">{msg.time}</span>
                         </div>

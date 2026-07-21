@@ -123,6 +123,7 @@ interface ChatNotificationContextValue {
   markNotificationRead: (id: number) => void;
   getUnreadCount: (role: 'customer' | 'admin' | 'designer') => number;
   getChatUnreadCount: (role: 'customer' | 'admin' | 'designer') => number;
+  deleteMessage: (threadId: string, messageId: number) => void;
 }
 
 const ChatNotificationContext = createContext<ChatNotificationContextValue | null>(null);
@@ -830,6 +831,22 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     [threads]
   );
 
+  const deleteMessage = useCallback((threadId: string, messageId: number) => {
+    setThreads((prev) =>
+      prev.map((t) => {
+        if (t.id !== threadId) return t;
+        const filteredMessages = t.messages.filter((m) => m.id !== messageId);
+        const lastMsgObj = filteredMessages[filteredMessages.length - 1];
+        return {
+          ...t,
+          messages: filteredMessages,
+          lastMessage: lastMsgObj ? lastMsgObj.text : '',
+          lastTime: lastMsgObj ? lastMsgObj.time : '',
+        };
+      })
+    );
+  }, []);
+
   return (
     <ChatNotificationContext.Provider
       value={{
@@ -852,6 +869,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         markNotificationRead,
         getUnreadCount,
         getChatUnreadCount,
+        deleteMessage,
       }}
     >
       {children}

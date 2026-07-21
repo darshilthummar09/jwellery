@@ -41,7 +41,7 @@ function AttachmentList({ attachments }: { attachments: ChatAttachment[] }) {
 
 export function GeneralChatPage() {
   const { user } = useAuth();
-  const { threads, sendCustomerMessage, markThreadRead, createThreadForOrder } = useChatNotification();
+  const { threads, sendCustomerMessage, markThreadRead, createThreadForOrder, deleteMessage } = useChatNotification();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -141,13 +141,26 @@ export function GeneralChatPage() {
               );
             }
 
+            const isDeletable = isMe;
+
             return (
               <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
                 {!isMe && <Avatar user={{ name: 'Dream Jewels Support' }} size="xs" />}
                 <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                  <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed space-y-3 ${isMe ? 'bg-emerald-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>
-                    {msg.text && <p>{msg.text}</p>}
-                    {msg.attachments && msg.attachments.length > 0 && <AttachmentList attachments={msg.attachments} />}
+                  <div className="flex items-center gap-2 group">
+                    {isDeletable && (
+                      <button 
+                        onClick={() => thread && deleteMessage(thread.id, msg.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded text-red-500 hover:text-red-700 text-xs transition-opacity cursor-pointer order-last"
+                        title="Delete message"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed space-y-3 ${isMe ? 'bg-emerald-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>
+                      {msg.text && <p>{msg.text}</p>}
+                      {msg.attachments && msg.attachments.length > 0 && <AttachmentList attachments={msg.attachments} />}
+                    </div>
                   </div>
                   <span className="text-[10px] text-slate-400 px-1">{msg.time}</span>
                 </div>
