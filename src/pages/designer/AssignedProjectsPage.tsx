@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, Clock } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -21,8 +21,20 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export function AssignedProjectsPage() {
   const { user } = useAuth();
-  const { projects } = useChatNotification();
+  const { projects, upsertProject } = useChatNotification();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  
+  const [updatingProject, setUpdatingProject] = useState<Project | null>(null);
+  const [statusInput, setStatusInput] = useState<Project['status']>('Approved');
+  const [progressInput, setProgressInput] = useState('');
+
+  // Sync inputs when updatingProject selection changes
+  useEffect(() => {
+    if (updatingProject) {
+      setStatusInput(updatingProject.status);
+      setProgressInput(updatingProject.progress);
+    }
+  }, [updatingProject]);
 
   const assignedProjects = projects.filter(
     (project) =>
@@ -30,6 +42,19 @@ export function AssignedProjectsPage() {
       project.status !== 'Rejected' &&
       project.designerName.toLowerCase() === (user?.name ?? '').toLowerCase()
   );
+
+  const handleStatusUpdate = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!updatingProject) return;
+
+    upsertProject({
+      ...updatingProject,
+      status: statusInput,
+      progress: progressInput.endsWith('%') ? progressInput : `${progressInput}%`,
+    });
+
+    setUpdatingProject(null);
+  };
 
   return (
     <PageContainer>
@@ -62,13 +87,55 @@ export function AssignedProjectsPage() {
                 <p className="text-sm text-slate-600 italic">{project.notes || 'No extra notes were provided.'}</p>
               </div>
               <div className="flex items-center gap-3 mt-4">
-                <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">Update Status</button>
+                <button onClick={() => setUpdatingProject(project)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">Update Status</button>
                 <button onClick={() => setSelectedProject(project)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors">View Details</button>
               </div>
             </div>
           ))
         )}
       </div>
+
+      {updatingProject && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setUpdatingProject(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-100 p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-base font-bold text-slate-800 mb-1">Update Project Status</h3>
+            <p className="text-xs text-slate-400 mb-4">{updatingProject.name} ({updatingProject.id})</p>
+            
+            <form onSubmit={handleStatusUpdate} className="space-y-4">
+              <label className="block text-sm font-medium text-slate-700">
+                Status
+                <select 
+                  value={statusInput} 
+                  onChange={(event) => setStatusInput(event.target.value as any)} 
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400"
+                >
+                  <option>Approved</option>
+                  <option>In Progress</option>
+                  <option>Review</option>
+                  <option>Completed</option>
+                </select>
+              </label>
+
+              <label className="block text-sm font-medium text-slate-700">
+                Progress Percentage
+                <input 
+                  type="text" 
+                  required
+                  value={progressInput} 
+                  onChange={(event) => setProgressInput(event.target.value)} 
+                  placeholder="e.g. 35%"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400"
+                />
+              </label>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setUpdatingProject(null)} className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold rounded-xl transition-colors">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {selectedProject && (
         <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setSelectedProject(null)}>
@@ -87,9 +154,21 @@ export function AssignedProjectsPage() {
                 { label: 'Metal', value: `${selectedProject.metal || 'Not specified'} ${selectedProject.karat ? `(${selectedProject.karat})` : ''}` },
                 { label: 'Size', value: selectedProject.size || 'Not specified' },
                 { label: 'Weight', value: selectedProject.weight || 'Not specified' },
+                { label: 'Progress', value: selectedProject.progress },
                 { label: 'Created', value: selectedProject.created },
                 { label: 'Project ID', value: <span className="font-mono text-xs">{selectedProject.id}</span> },
               ]}
+              actions={
+                <button 
+                  onClick={() => {
+                    setUpdatingProject(selectedProject);
+                    setSelectedProject(null);
+                  }} 
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors"
+                >
+                  Update Status
+                </button>
+              }
             >
               <div className="bg-slate-50 rounded-xl px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Project Notes</div>
@@ -114,3 +193,4 @@ export function AssignedProjectsPage() {
     </PageContainer>
   );
 }
+
