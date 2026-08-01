@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AppLayout } from '../layouts/AppLayout';
-import { PublicLayout } from '../layouts/PublicLayout';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleRoute } from './RoleRoute';
@@ -38,8 +37,6 @@ import { DesignerNotificationsPage } from '../pages/designer/NotificationsPage';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
-// Landing Page (existing)
-import LandingApp from '../app/App';
 
 export function AppRouter() {
   return (
@@ -47,10 +44,8 @@ export function AppRouter() {
       <Routes>
         <Route element={<AppLayout />}>
 
-          {/* ─── Public: Landing Page ─── */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<LandingApp />} />
-          </Route>
+          {/* ─── Public: Redirect to Login ─── */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* ─── Auth ─── */}
           <Route path="/login" element={<LoginPage />} />
