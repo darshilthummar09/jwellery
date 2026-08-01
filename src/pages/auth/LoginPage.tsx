@@ -62,7 +62,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
 
         {/* Logo */}
@@ -94,7 +94,7 @@ export function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-base sm:text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
               />
             </div>
 
@@ -111,7 +111,7 @@ export function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
+                  className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-base sm:text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
                 />
                 <button
                   type="button"

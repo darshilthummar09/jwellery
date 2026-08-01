@@ -108,7 +108,7 @@ export function ProjectsPage() {
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as 'All' | ProjectStatus)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-emerald-400"
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-base sm:text-sm outline-none focus:border-emerald-400"
             >
               <option value="All">All statuses</option>
               <option value="Pending Approval">Pending Approval</option>
@@ -253,13 +253,13 @@ export function ProjectsPage() {
                   required
                   value={String(editingProject[key as keyof Project])}
                   onChange={(event) => setEditingProject({ ...editingProject, [key]: event.target.value })}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
                 />
               </label>
             ))}
             <label className="text-sm font-medium text-slate-700">
               Status
-              <select value={editingProject.status} onChange={(event) => setEditingProject({ ...editingProject, status: event.target.value as ProjectStatus })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400">
+              <select value={editingProject.status} onChange={(event) => setEditingProject({ ...editingProject, status: event.target.value as ProjectStatus })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400">
                 <option>Pending Approval</option>
                 <option>Approved</option>
                 <option>Rejected</option>
@@ -270,7 +270,7 @@ export function ProjectsPage() {
             </label>
             <label className="text-sm font-medium text-slate-700">
               Priority
-              <select value={editingProject.priority} onChange={(event) => setEditingProject({ ...editingProject, priority: event.target.value as Project['priority'] })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400">
+              <select value={editingProject.priority} onChange={(event) => setEditingProject({ ...editingProject, priority: event.target.value as Project['priority'] })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400">
                 <option>High</option>
                 <option>Medium</option>
                 <option>Low</option>
@@ -278,7 +278,7 @@ export function ProjectsPage() {
             </label>
             <label className="sm:col-span-2 text-sm font-medium text-slate-700">
               Notes
-              <textarea value={editingProject.notes} onChange={(event) => setEditingProject({ ...editingProject, notes: event.target.value })} rows={3} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              <textarea value={editingProject.notes} onChange={(event) => setEditingProject({ ...editingProject, notes: event.target.value })} rows={3} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
             </label>
             <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
               <button type="button" onClick={() => setEditingProject(null)} className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold rounded-xl transition-colors">Cancel</button>
@@ -298,7 +298,7 @@ export function ProjectsPage() {
                 onChange={(event) => setRejectionReason(event.target.value)}
                 rows={3}
                 placeholder="Optional reason for rejection"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
               />
             </label>
             <div className="flex justify-end gap-3 pt-2">
