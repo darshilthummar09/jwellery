@@ -62,6 +62,8 @@ export function AppRouter() {
               {/* Super Admin */}
               <Route element={<RoleRoute allowedRoles={['super-admin']} />}>
                 <Route path="/dashboard/super-admin" element={<SuperAdminDashboard />} />
+                <Route path="/dashboard/super-admin/projects" element={<ProjectsPage />} />
+                <Route path="/dashboard/super-admin/chats" element={<ChatsPage />} />
                 <Route path="/dashboard/super-admin/users" element={<UsersPage />} />
                 <Route path="/dashboard/super-admin/dynamic-fields" element={<DynamicFieldsPage />} />
                 <Route path="/dashboard/super-admin/categories" element={<CategoriesPage />} />

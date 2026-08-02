@@ -7,6 +7,7 @@ import { DetailCard } from '../../components/common/DetailCard';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Project, ProjectStatus, useChatNotification } from '../../context/ChatNotificationContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   'Pending Approval': 'bg-orange-100 text-orange-700',
@@ -37,6 +38,7 @@ const emptyProject = (nextId: string): Project => ({
 
 export function ProjectsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { projects, ensureDesignerThread, upsertProject, approveProject, rejectProject } = useChatNotification();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -84,7 +86,9 @@ export function ProjectsPage() {
 
     const threadId = ensureDesignerThread(selectedProject.designerName, selectedProject.name);
     setSelectedProject(null);
-    navigate(`/dashboard/admin/chats?thread=${encodeURIComponent(threadId)}`);
+    
+    const chatsPath = user?.role === 'super-admin' ? '/dashboard/super-admin/chats' : '/dashboard/admin/chats';
+    navigate(`${chatsPath}?thread=${encodeURIComponent(threadId)}`);
   };
 
   const handleApproveProject = (project: Project) => {

@@ -9,6 +9,8 @@ export interface NavItem {
 
 export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard',      path: '/dashboard/super-admin',               icon: 'LayoutDashboard', description: 'Overview & metrics' },
+  { label: 'Projects',       path: '/dashboard/super-admin/projects',      icon: 'Briefcase',       description: 'Manage projects' },
+  { label: 'Chats',          path: '/dashboard/super-admin/chats',         icon: 'MessageSquare',   description: 'Platform chats' },
   { label: 'Users',          path: '/dashboard/super-admin/users',         icon: 'Users',           description: 'Manage all users' },
   { label: 'Dynamic Fields', path: '/dashboard/super-admin/dynamic-fields',icon: 'Sliders',         description: 'Custom field management' },
   { label: 'Categories',     path: '/dashboard/super-admin/categories',    icon: 'Tag',             description: 'Product categories' },
