@@ -198,6 +198,8 @@ export function AiStudioPage() {
 
   // Place Custom Order
   const handlePlaceOrder = () => {
+    const customImage = RENDER_IMAGES[specs.category] || '/ai-ring.png';
+
     const orderDetails: OrderDetails = {
       name: `AI Co-Created ${specs.category}`,
       category: specs.category,
@@ -208,20 +210,24 @@ export function AiStudioPage() {
       weight: specs.weight,
       notes: `${specs.notes} | AI-Rendered Image Seed: ${specs.category}.`,
       deliveryDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toLocaleDateString(), // 3 weeks
+      image: customImage,
+      imageName: `AI_${specs.category}_Render.png`,
+      attachments: [{
+        dataUrl: customImage,
+        name: `AI_${specs.category}_Render.png`,
+        type: 'image/png',
+        size: 450000,
+      }],
+      images: [{
+        id: Date.now(),
+        name: `AI_${specs.category}_Render.png`,
+        url: customImage,
+        size: 450000,
+        type: 'image/png'
+      }]
     };
 
-    // Submits the custom order to the context!
-    // Since RENDER_IMAGES map references valid local assets:
-    const customImage = RENDER_IMAGES[specs.category] || '/ai-ring.png';
-    const attachments = [{
-      id: Date.now(),
-      name: `AI_${specs.category}_Render.png`,
-      url: customImage,
-      kind: 'image' as const,
-      size: 450000,
-    }];
-
-    createThreadForOrder(customerId, customerName, orderDetails, attachments);
+    createThreadForOrder(customerId, customerName, orderDetails);
     setIsSuccess(true);
 
     // Redirect user to My Products page after success popup

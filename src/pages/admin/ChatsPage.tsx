@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { FileText, Image as ImageIcon, MessageSquare, Paperclip, Send, Video, X } from 'lucide-react';
+import { FileText, Image as ImageIcon, MessageSquare, Paperclip, Send, Video, X, Download } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { Avatar } from '../../components/common/Avatar';
@@ -28,19 +28,32 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function AttachmentList({ attachments, isAdmin }: { attachments: ChatAttachment[]; isAdmin: boolean }) {
+function AttachmentList({
+  attachments,
+  isAdmin,
+  onImageClick,
+}: {
+  attachments: ChatAttachment[];
+  isAdmin: boolean;
+  onImageClick: (url: string, name: string) => void;
+}) {
   return (
     <div className="space-y-2">
       {attachments.map((attachment) => {
         if (attachment.kind === 'image') {
           return (
-            <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="block">
+            <button
+              key={attachment.id}
+              type="button"
+              onClick={() => onImageClick(attachment.url, attachment.name)}
+              className="block cursor-pointer outline-none active:scale-[0.99] transition-transform text-left border-0 p-0 bg-transparent"
+            >
               <img
                 src={attachment.url}
                 alt={attachment.name}
                 className="max-h-48 max-w-full rounded-xl object-cover border border-white/30"
               />
-            </a>
+            </button>
           );
         }
 
@@ -88,6 +101,7 @@ export function ChatsPage() {
   );
   const [input, setInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -239,7 +253,7 @@ export function ChatsPage() {
                                 })}
                                 {msg.attachments && msg.attachments.length > 0 && (
                                   <div className="pt-2 mt-2 border-t border-slate-100">
-                                    <AttachmentList attachments={msg.attachments} isAdmin={false} />
+                                    <AttachmentList attachments={msg.attachments} isAdmin={false} onImageClick={(url, name) => setLightboxImage({ url, name })} />
                                   </div>
                                 )}
                               </div>
@@ -273,7 +287,7 @@ export function ChatsPage() {
                             }`}>
                               {msg.text && <p>{msg.text}</p>}
                               {msg.attachments && msg.attachments.length > 0 && (
-                                <AttachmentList attachments={msg.attachments} isAdmin={isAdmin} />
+                                <AttachmentList attachments={msg.attachments} isAdmin={isAdmin} onImageClick={(url, name) => setLightboxImage({ url, name })} />
                               )}
                             </div>
                           </div>
@@ -356,6 +370,44 @@ export function ChatsPage() {
           </div>
         </div>
       </div>
+      {/* Lightbox Modal overlay */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          {/* Header Actions */}
+          <div className="absolute top-4 right-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            {/* Download Button */}
+            <a
+              href={lightboxImage.url}
+              download={lightboxImage.name}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              title="Download Image"
+            >
+              <Download size={18} />
+            </a>
+            {/* Close Button */}
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Centered Image */}
+          <div className="max-w-4xl max-h-[80vh] flex flex-col items-center justify-center gap-4" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={lightboxImage.url}
+              alt={lightboxImage.name}
+              className="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl select-none"
+            />
+            <p className="text-sm font-medium text-slate-300">{lightboxImage.name}</p>
+          </div>
+        </div>
+      )}
     </PageContainer>
   );
 }

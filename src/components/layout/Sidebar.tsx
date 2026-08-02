@@ -25,13 +25,24 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-function NavItemLink({ item, collapsed, badgeCount = 0 }: { item: NavItem; collapsed: boolean; badgeCount?: number }) {
+function NavItemLink({
+  item,
+  collapsed,
+  badgeCount = 0,
+  onClick,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  badgeCount?: number;
+  onClick?: () => void;
+}) {
   const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
 
   return (
     <NavLink
       to={item.path}
       end={item.path.split('/').length <= 3}
+      onClick={onClick}
       className={({ isActive }) =>
         `group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
           isActive
@@ -77,7 +88,7 @@ function SidebarContent({
 }) {
   const { user, logout } = useAuth();
   const { role } = useRole();
-  const { getChatUnreadCount } = useChatNotification();
+  const { getChatUnreadCount, projects } = useChatNotification();
   const navigate = useNavigate();
   const navItems = role ? ROLE_NAV_MAP[role] : [];
   const chatUnreadCount = role ? getChatUnreadCount(role === 'super-admin' ? 'admin' : role) : 0;
@@ -125,14 +136,24 @@ function SidebarContent({
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
-          <NavItemLink
-            key={item.path}
-            item={item}
-            collapsed={collapsed && !isMobile}
-            badgeCount={item.path.includes('/chat') || item.path.includes('/chats') ? chatUnreadCount : 0}
-          />
-        ))}
+        {navItems.map((item) => {
+          let badgeCount = 0;
+          if (item.path.includes('/chat') || item.path.includes('/chats')) {
+            badgeCount = chatUnreadCount;
+          } else if (item.path.includes('/projects') && (role === 'admin' || role === 'super-admin')) {
+            badgeCount = projects.filter((p) => p.status === 'Pending Approval').length;
+          }
+
+          return (
+            <NavItemLink
+              key={item.path}
+              item={item}
+              collapsed={collapsed && !isMobile}
+              onClick={isMobile ? onClose : undefined}
+              badgeCount={badgeCount}
+            />
+          );
+        })}
       </nav>
 
       {/* User Profile Footer */}

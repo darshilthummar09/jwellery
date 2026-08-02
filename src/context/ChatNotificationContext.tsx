@@ -110,7 +110,7 @@ interface ChatNotificationContextValue {
   threads: ChatThread[];
   projects: Project[];
   notifications: AppNotification[];
-  sendCustomerMessage: (customerId: string, customerName: string, text: string) => void;
+  sendCustomerMessage: (customerId: string, customerName: string, text: string, optionalThreadId?: string) => void;
   sendDesignerMessage: (threadId: string, designerName: string, text: string) => void;
   sendAdminMessage: (threadId: string, text: string, attachments?: ChatAttachment[]) => void;
   markThreadRead: (threadId: string, as: 'admin' | 'customer' | 'designer') => void;
@@ -537,6 +537,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         weight: order.weight,
         notes: order.notes,
         image: orderAttachments.find(a => a.kind === 'image')?.url,
+        images: orderAttachments.map(a => ({
+          id: a.id,
+          name: a.name,
+          url: a.url,
+          size: a.size,
+          type: a.type
+        })),
         created: order.deliveryDate ?? new Date().toLocaleDateString(),
         progress: '0%',
       };
@@ -627,6 +634,33 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     const designerThreadId = createDesignerThreadId(approvedProject.designerName);
 
+    // Extract and format customer images into chat attachments
+    const attachments: ChatAttachment[] = [];
+    if (approvedProject.image) {
+      attachments.push({
+        id: Date.now() + 999,
+        name: `${approvedProject.name}_design.png`,
+        size: 450000,
+        type: 'image/png',
+        url: approvedProject.image,
+        kind: 'image',
+      });
+    }
+    if (approvedProject.images && approvedProject.images.length > 0) {
+      approvedProject.images.forEach((img, idx) => {
+        if (img.url !== approvedProject.image) {
+          attachments.push({
+            id: Date.now() + idx,
+            name: img.name || `attachment_${idx}.png`,
+            size: img.size || 200000,
+            type: img.type || 'image/png',
+            url: img.url,
+            kind: 'image',
+          });
+        }
+      });
+    }
+
     const detailText = `Approved project assigned:\n${buildProjectDetailsText(approvedProject)}`;
     const msg: ChatMessage = {
       id: Date.now(),
@@ -634,6 +668,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       senderName: 'Dream Jewels Support',
       text: detailText,
       time: nowTime(),
+      attachments: attachments.length > 0 ? attachments : undefined,
       seenBy: [],
     };
 
@@ -716,7 +751,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   }, [projects, addNotification]);
 
   const sendCustomerMessage = useCallback(
-    (customerId: string, customerName: string, text: string) => {
+    (customerId: string, customerName: string, text: string, optionalThreadId?: string) => {
       const msg: ChatMessage = {
         id: Date.now(),
         from: 'customer',
@@ -727,9 +762,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       };
       setThreads((prev) => {
         const existing = prev.find(
-          (t) =>
+          (t) => optionalThreadId ? t.id === optionalThreadId : (
             t.participantRole !== 'designer' &&
             (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())
+          )
         );
         if (existing) {
           return prev.map((t) =>

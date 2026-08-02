@@ -254,7 +254,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       </button>
 
       {/* Breadcrumb */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 hidden sm:block">
         <Breadcrumb />
       </div>
 

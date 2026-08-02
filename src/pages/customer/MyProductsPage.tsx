@@ -354,17 +354,10 @@ export function MyProductsPage() {
       setError('Please provide a name or title for your custom jewellery piece.');
       return;
     }
-    if (!budget.trim()) {
-      setError('Please provide an estimated budget.');
-      return;
-    }
 
     setIsSubmitting(true);
 
-    const formattedBudget =
-      budget.startsWith('₹') || budget.toLowerCase() === 'estimated'
-        ? budget
-        : `₹${budget}`;
+    const formattedBudget = 'Estimated';
 
     const attachments: OrderAttachment[] = uploadedFiles.map((f) => ({
       dataUrl: f.dataUrl,
@@ -565,21 +558,7 @@ export function MyProductsPage() {
               </div>
             </div>
 
-            {/* Budget */}
-            <div>
-              <label htmlFor="order-budget" className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                Estimated Budget (₹)
-              </label>
-              <input
-                id="order-budget"
-                type="text"
-                required
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                placeholder="e.g. 1,50,000 or Estimated"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
-              />
-            </div>
+
 
             {/* Notes */}
             <div>

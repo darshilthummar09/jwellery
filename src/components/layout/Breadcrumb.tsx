@@ -34,7 +34,7 @@ export function Breadcrumb() {
 
   return (
     <nav aria-label="Breadcrumb">
-      <ol className="flex items-center gap-1 flex-wrap">
+      <ol className="flex items-center gap-1 overflow-hidden whitespace-nowrap text-ellipsis">
         <li>
           <Link
             to="/"
