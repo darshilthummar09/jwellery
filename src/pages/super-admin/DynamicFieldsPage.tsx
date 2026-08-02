@@ -3,7 +3,7 @@ import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { EmptyState } from '../../components/common/EmptyState';
 
-const SAMPLE_FIELDS: Array<{ id: number; name: string; type: string; options: string; required: boolean }> = [];
+export const SAMPLE_FIELDS: Array<{ id: number; name: string; type: string; options: string; required: boolean }> = [];
 
 export function DynamicFieldsPage() {
   return (

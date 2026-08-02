@@ -3,7 +3,7 @@ import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { EmptyState } from '../../components/common/EmptyState';
 
-const CATEGORIES: Array<{ name: string; count: number; icon: string; color: string }> = [];
+export const CATEGORIES: Array<{ name: string; count: number; icon: string; color: string }> = [];
 
 export function CategoriesPage() {
   return (
