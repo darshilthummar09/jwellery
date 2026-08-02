@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { AlertCircle, Clock } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -21,8 +22,31 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export function AssignedProjectsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { projects, upsertProject } = useChatNotification();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+
+  const assignedProjects = projects.filter(
+    (project) =>
+      project.status !== 'Pending Approval' &&
+      project.status !== 'Rejected' &&
+      project.designerName.toLowerCase() === (user?.name ?? '').toLowerCase()
+  );
+
+  // Auto-select project from query param ?id=...
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      const proj = assignedProjects.find((p) => p.id === id);
+      if (proj) {
+        setSelectedProject(proj);
+        // Clear search param so it doesn't reopen if closed
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('id');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [searchParams, assignedProjects, setSearchParams]);
   
   const [updatingProject, setUpdatingProject] = useState<Project | null>(null);
   const [statusInput, setStatusInput] = useState<Project['status']>('Approved');
@@ -36,12 +60,6 @@ export function AssignedProjectsPage() {
     }
   }, [updatingProject]);
 
-  const assignedProjects = projects.filter(
-    (project) =>
-      project.status !== 'Pending Approval' &&
-      project.status !== 'Rejected' &&
-      project.designerName.toLowerCase() === (user?.name ?? '').toLowerCase()
-  );
 
   const handleStatusUpdate = (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,8 +96,8 @@ export function AssignedProjectsPage() {
                   <p className="text-sm text-slate-500 mt-0.5">Client: {project.customerName}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[project.status] ?? 'bg-slate-100 text-slate-700'}`}>{project.status}</span>
-                  <span className="flex items-center gap-1 text-xs text-slate-400"><Clock size={11} />{project.due}</span>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[project.status] ?? 'bg-slate-100 text-slate-700'}`}>{project.status}</span>
+                  <span className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap"><Clock size={11} className="flex-shrink-0" />{project.due}</span>
                 </div>
               </div>
               <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-start gap-2">
@@ -145,7 +163,7 @@ export function AssignedProjectsPage() {
               subtitle={`${selectedProject.id} - ${selectedProject.category}`}
               className="shadow-2xl"
               onClose={() => setSelectedProject(null)}
-              badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[selectedProject.status] ?? 'bg-slate-100 text-slate-700'}`}>{selectedProject.status}</span>}
+              badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[selectedProject.status] ?? 'bg-slate-100 text-slate-700'}`}>{selectedProject.status}</span>}
               fields={[
                 { label: 'Customer', value: selectedProject.customerName },
                 { label: 'Budget', value: selectedProject.budget },

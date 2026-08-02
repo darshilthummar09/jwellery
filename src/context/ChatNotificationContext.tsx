@@ -50,6 +50,9 @@ export interface AppNotification {
   body: string;
   time: string;
   read: boolean;
+  type?: 'order' | 'chat' | 'project';
+  projectId?: string;
+  threadId?: string;
 }
 
 export interface OrderAttachment {
@@ -296,11 +299,19 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         if (value) {
           const sanitized = removeDeletedSeedData(value);
           if (sanitized && JSON.stringify(sanitized) !== JSON.stringify(value)) {
-            set(chatStateRef, sanitized);
+            try {
+              set(chatStateRef, JSON.parse(JSON.stringify(sanitized)));
+            } catch (e) {
+              console.error('Failed to update sanitized state in Firebase:', e);
+            }
           }
           applyChatState(sanitized ?? value);
         } else {
-          set(chatStateRef, initialStateRef.current);
+          try {
+            set(chatStateRef, JSON.parse(JSON.stringify(initialStateRef.current)));
+          } catch (e) {
+            console.error('Failed to initialize Firebase state:', e);
+          }
         }
         setRemoteReady(true);
       });
@@ -333,7 +344,12 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     // Write to Firebase only if remote is ready
     if (remoteReady && firebaseDatabase) {
-      set(ref(firebaseDatabase, 'chatState'), { threads, projects, notifications, notifCounter });
+      try {
+        const cleanState = JSON.parse(serialized);
+        set(ref(firebaseDatabase, 'chatState'), cleanState);
+      } catch (e) {
+        console.error('Failed to save state to Firebase:', e);
+      }
     }
   }, [threads, projects, notifications, notifCounter, remoteReady]);
 
@@ -515,45 +531,73 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       setProjects((prev) => [newProject, ...prev.filter((project) => project.id !== projectId)]);
 
-      setNotifCounter((c) => {
-        const id = c + 1;
-        setNotifications((prev) => [
-          {
-            id,
-            role: 'admin',
-            title: `New order from ${customerName}`,
-            body: `"${orderName}" submitted for review.`,
-            time: 'Just now',
-            read: false,
-          },
-          ...prev,
-        ]);
-        // Customer notification: order placed
-        setNotifications((prev) => [
-          {
-            id: id + 1,
-            role: 'customer',
-            title: `Order placed: ${orderName}`,
-            body: 'Your custom order has been received. Check your chat for updates.',
-            time: 'Just now',
-            read: false,
-          },
-          ...prev,
-        ]);
-        return id + 1;
-      });
+      addNotification([
+        {
+          role: 'admin',
+          title: `New order from ${customerName}`,
+          body: `"${orderName}" submitted for review.`,
+          time: 'Just now',
+          read: false,
+          type: 'order',
+          projectId: projectId,
+        },
+        {
+          role: 'customer',
+          title: `Order placed: ${orderName}`,
+          body: 'Your custom order has been received. Check your chat for updates.',
+          time: 'Just now',
+          read: false,
+          type: 'chat',
+          threadId: `customer-${customerId}`,
+        }
+      ]);
     },
-    []
+    [addNotification]
   );
 
   const upsertProject = useCallback((project: Project) => {
+    const existing = projects.find((item) => item.id === project.id);
+
     setProjects((current) => {
       const exists = current.some((item) => item.id === project.id);
       return exists
         ? current.map((item) => (item.id === project.id ? project : item))
         : [project, ...current];
     });
-  }, []);
+
+    if (existing) {
+      const statusChanged = existing.status !== project.status;
+      const progressChanged = existing.progress !== project.progress;
+
+      if (statusChanged || progressChanged) {
+        const statusText = statusChanged ? `status to ${project.status}` : '';
+        const progressText = progressChanged ? `progress to ${project.progress}` : '';
+        const andText = statusChanged && progressChanged ? ' and ' : '';
+        const changeDesc = `${statusText}${andText}${progressText}`;
+
+        addNotification([
+          {
+            role: 'customer',
+            title: `Project Update: ${project.name}`,
+            body: `Your project has been updated: ${changeDesc}.`,
+            time: 'Just now',
+            read: false,
+            type: 'project',
+            projectId: project.id,
+          },
+          {
+            role: 'admin',
+            title: `Project Update: ${project.name}`,
+            body: `Designer ${project.designerName} updated ${changeDesc}.`,
+            time: 'Just now',
+            read: false,
+            type: 'project',
+            projectId: project.id,
+          }
+        ]);
+      }
+    }
+  }, [projects, addNotification]);
 
   const approveProject = useCallback((projectId: string) => {
     const project = projects.find((item) => item.id === projectId);
@@ -610,31 +654,27 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           ]
     );
 
-    setNotifCounter((c) => {
-      const customerNotifId = c + 1;
-      const designerNotifId = c + 2;
-      setNotifications((prev) => [
-        {
-          id: customerNotifId,
-          role: 'customer',
-          title: `Project approved: ${approvedProject.name}`,
-          body: 'Your custom order has been approved and moved into design.',
-          time: 'Just now',
-          read: false,
-        },
-        {
-          id: designerNotifId,
-          role: 'designer',
-          title: `New project assigned: ${approvedProject.name}`,
-          body: `${approvedProject.customerName}'s full project details are ready for design.`,
-          time: 'Just now',
-          read: false,
-        },
-        ...prev,
-      ]);
-      return designerNotifId;
-    });
-  }, [projects]);
+    addNotification([
+      {
+        role: 'customer',
+        title: `Project approved: ${approvedProject.name}`,
+        body: 'Your custom order has been approved and moved into design.',
+        time: 'Just now',
+        read: false,
+        type: 'project',
+        projectId: approvedProject.id,
+      },
+      {
+        role: 'designer',
+        title: `New project assigned: ${approvedProject.name}`,
+        body: `${approvedProject.customerName}'s full project details are ready for design.`,
+        time: 'Just now',
+        read: false,
+        type: 'project',
+        projectId: approvedProject.id,
+      }
+    ]);
+  }, [projects, addNotification]);
 
   const rejectProject = useCallback((projectId: string, reason?: string) => {
     const project = projects.find((item) => item.id === projectId);
@@ -650,24 +690,18 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       current.map((item) => (item.id === projectId ? rejectedProject : item))
     );
 
-    setNotifCounter((c) => {
-      const id = c + 1;
-      setNotifications((prev) => [
-        {
-          id,
-          role: 'customer',
-          title: `Project rejected: ${rejectedProject.name}`,
-          body: rejectedProject.rejectionReason
-            ? `Reason: ${rejectedProject.rejectionReason}`
-            : 'Your custom order could not be approved at this time.',
-          time: 'Just now',
-          read: false,
-        },
-        ...prev,
-      ]);
-      return id;
+    addNotification({
+      role: 'customer',
+      title: `Project rejected: ${rejectedProject.name}`,
+      body: rejectedProject.rejectionReason
+        ? `Reason: ${rejectedProject.rejectionReason}`
+        : 'Your custom order could not be approved at this time.',
+      time: 'Just now',
+      read: false,
+      type: 'project',
+      projectId: rejectedProject.id,
     });
-  }, [projects]);
+  }, [projects, addNotification]);
 
   const sendCustomerMessage = useCallback(
     (customerId: string, customerName: string, text: string) => {
@@ -706,23 +740,17 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         return [newThread, ...prev];
       });
 
-      setNotifCounter((c) => {
-        const id = c + 1;
-        setNotifications((prev) => [
-          {
-            id,
-            role: 'admin',
-            title: `New message from ${customerName}`,
-            body: text.length > 60 ? text.slice(0, 60) + '…' : text,
-            time: 'Just now',
-            read: false,
-          },
-          ...prev,
-        ]);
-        return id;
+      addNotification({
+        role: 'admin',
+        title: `New message from ${customerName}`,
+        body: text.length > 60 ? text.slice(0, 60) + '…' : text,
+        time: 'Just now',
+        read: false,
+        type: 'chat',
+        threadId: `customer-${customerId}`,
       });
     },
-    []
+    [addNotification]
   );
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
@@ -742,7 +770,17 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           : t
       )
     );
-  }, []);
+
+    addNotification({
+      role: 'admin',
+      title: `New message from Designer (${designerName})`,
+      body: text.length > 60 ? text.slice(0, 60) + '…' : text,
+      time: 'Just now',
+      read: false,
+      type: 'chat',
+      threadId: threadId,
+    });
+  }, [addNotification]);
 
   const sendAdminMessage = useCallback((threadId: string, text: string, attachments: ChatAttachment[] = []) => {
     const msg: ChatMessage = {
@@ -767,7 +805,21 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           : t
       )
     );
-  }, []);
+
+    const thread = threads.find((t) => t.id === threadId);
+    if (thread) {
+      const recipientRole = thread.participantRole === 'designer' ? 'designer' : 'customer';
+      addNotification({
+        role: recipientRole,
+        title: 'New message from Support',
+        body: text.length > 60 ? text.slice(0, 60) + '…' : text,
+        time: 'Just now',
+        read: false,
+        type: 'chat',
+        threadId: threadId,
+      });
+    }
+  }, [threads, addNotification]);
 
   const markThreadRead = useCallback((threadId: string, as: 'admin' | 'customer' | 'designer') => {
     setThreads((prev) =>
@@ -789,12 +841,16 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setNotifications((prev) => prev.filter((n) => n.role !== as || !isChatNotification(n)));
   }, []);
 
-  const addNotification = useCallback((n: Omit<AppNotification, 'id'>) => {
-    setNotifCounter((c) => {
-      const id = c + 1;
-      setNotifications((prev) => [{ ...n, id }, ...prev]);
-      return id;
+  const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
+    const items = Array.isArray(n) ? n : [n];
+    setNotifications((prev) => {
+      const newItems = items.map((item, idx) => ({
+        ...item,
+        id: Date.now() + idx,
+      }));
+      return [...newItems, ...prev];
     });
+    setNotifCounter((c) => c + items.length);
   }, []);
 
   const markAllNotificationsRead = useCallback((role: 'customer' | 'admin' | 'designer') => {

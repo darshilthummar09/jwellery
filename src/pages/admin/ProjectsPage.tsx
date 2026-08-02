@@ -1,5 +1,5 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { FormEvent, useMemo, useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Check, Clock, Filter, Plus, X } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -37,12 +37,28 @@ const emptyProject = (nextId: string): Project => ({
 
 export function ProjectsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { projects, ensureDesignerThread, upsertProject, approveProject, rejectProject } = useChatNotification();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [rejectingProject, setRejectingProject] = useState<Project | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | ProjectStatus>('All');
+
+  // Auto-select project from query param ?id=...
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      const proj = projects.find((p) => p.id === id);
+      if (proj) {
+        setSelectedProject(proj);
+        // Clear search param so it doesn't reopen if closed
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('id');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [searchParams, projects, setSearchParams]);
 
   const filteredProjects = useMemo(
     () => projects.filter((project) => statusFilter === 'All' || project.status === statusFilter),
@@ -128,33 +144,42 @@ export function ProjectsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">ID</th>
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Project</th>
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Customer</th>
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Designer</th>
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Budget</th>
-                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Due</th>
-                  <th className="text-right px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Actions</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">ID</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Project</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Designer</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Status</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Budget</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Due</th>
+                  <th className="text-right px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredProjects.map((project) => (
                   <tr key={project.id} onClick={() => setSelectedProject(project)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
-                    <td className="px-6 py-4 font-mono text-xs text-slate-400">{project.id}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-400 whitespace-nowrap">{project.id}</td>
                     <td className="px-6 py-4 font-medium text-slate-800">{project.name}</td>
-                    <td className="px-6 py-4 text-slate-600">{project.customerName}</td>
-                    <td className="px-6 py-4 text-slate-600">{project.designerName}</td>
-                    <td className="px-6 py-4"><span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[project.status]}`}>{project.status}</span></td>
-                    <td className="px-6 py-4 font-medium text-slate-700">{project.budget}</td>
-                    <td className="px-6 py-4 text-slate-500 flex items-center gap-1.5"><Clock size={12} className="text-slate-300" />{project.due}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{project.customerName}</td>
+                    <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{project.designerName}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[project.status]}`}>
+                        {project.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">{project.budget}</td>
+                    <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={12} className="text-slate-300 flex-shrink-0" />
+                        {project.due}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {project.status === 'Pending Approval' ? (
                         <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
-                          <button onClick={() => handleApproveProject(project)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors">
+                          <button onClick={() => handleApproveProject(project)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
                             <Check size={13} /> Accept
                           </button>
-                          <button onClick={() => setRejectingProject(project)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-lg transition-colors">
+                          <button onClick={() => setRejectingProject(project)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
                             <X size={13} /> Reject
                           </button>
                         </div>
@@ -178,7 +203,7 @@ export function ProjectsPage() {
               subtitle={`${selectedProject.id} - ${selectedProject.category}`}
               className="shadow-2xl"
               onClose={() => setSelectedProject(null)}
-              badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[selectedProject.status]}`}>{selectedProject.status}</span>}
+              badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[selectedProject.status]}`}>{selectedProject.status}</span>}
               fields={[
                 { label: 'Customer', value: selectedProject.customerName },
                 { label: 'Designer', value: selectedProject.designerName },

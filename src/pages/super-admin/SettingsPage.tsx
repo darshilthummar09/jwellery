@@ -25,7 +25,6 @@ const SETTING_GROUPS = [
     title: 'Security',
     icon: Shield,
     items: [
-      { label: 'Two-Factor Auth',  value: false, type: 'toggle' },
       { label: 'Session Timeout', value: '30 minutes', type: 'select' },
     ],
   },

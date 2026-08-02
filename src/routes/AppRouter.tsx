@@ -26,6 +26,7 @@ import { CustomerDashboard } from '../pages/customer/CustomerDashboard';
 import { MyProductsPage } from '../pages/customer/MyProductsPage';
 import { GeneralChatPage } from '../pages/customer/GeneralChatPage';
 import { CustomerNotificationsPage } from '../pages/customer/NotificationsPage';
+import { AiStudioPage } from '../pages/customer/AiStudioPage';
 
 // Designer Pages
 import { DesignerDashboard } from '../pages/designer/DesignerDashboard';
@@ -79,6 +80,7 @@ export function AppRouter() {
               {/* Customer */}
               <Route element={<RoleRoute allowedRoles={['customer']} />}>
                 <Route path="/dashboard/customer" element={<CustomerDashboard />} />
+                <Route path="/dashboard/customer/ai-studio" element={<AiStudioPage />} />
                 <Route path="/dashboard/customer/my-products" element={<MyProductsPage />} />
                 <Route path="/dashboard/customer/chat" element={<GeneralChatPage />} />
                 <Route path="/dashboard/customer/notifications" element={<CustomerNotificationsPage />} />

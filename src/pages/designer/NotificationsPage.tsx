@@ -1,10 +1,12 @@
 import { CheckCheck } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 
 export function DesignerNotificationsPage() {
   const { notifications, markAllNotificationsRead, markNotificationRead } = useChatNotification();
+  const navigate = useNavigate();
   const myNotifications = notifications.filter((n) => n.role === 'designer');
 
   return (
@@ -27,7 +29,14 @@ export function DesignerNotificationsPage() {
             myNotifications.map((n) => (
               <div
                 key={n.id}
-                onClick={() => markNotificationRead(n.id)}
+                onClick={() => {
+                  markNotificationRead(n.id);
+                  if (n.type === 'chat' && n.threadId) {
+                    navigate(`/dashboard/designer/chat`);
+                  } else if (n.type === 'project' && n.projectId) {
+                    navigate(`/dashboard/designer/assigned-projects?id=${n.projectId}`);
+                  }
+                }}
                 className={`flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-colors cursor-pointer ${n.read ? 'opacity-60' : ''}`}
               >
                 <div className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${n.read ? 'bg-slate-200' : 'bg-emerald-500'}`} />

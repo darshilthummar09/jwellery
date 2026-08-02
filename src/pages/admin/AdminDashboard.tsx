@@ -48,27 +48,29 @@ export function AdminDashboard() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Project</th>
-                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Customer</th>
-                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Designer</th>
-                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Status</th>
-                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Due</th>
+                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Project</th>
+                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
+                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Designer</th>
+                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Status</th>
+                <th className="text-left px-6 py-3 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Due</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {RECENT_PROJECTS.map((p, i) => (
                 <tr key={i} onClick={() => navigate('/dashboard/admin/projects')} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
                   <td className="px-6 py-4 font-medium text-slate-800">{p.name}</td>
-                  <td className="px-6 py-4 text-slate-600">{p.customer}</td>
-                  <td className="px-6 py-4 text-slate-600">{p.designer}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>
+                  <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{p.customer}</td>
+                  <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{p.designer}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[p.status]}`}>
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-500 flex items-center gap-1.5">
-                    <Clock size={13} className="text-slate-300" />
-                    {p.due}
+                  <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={13} className="text-slate-300 flex-shrink-0" />
+                      {p.due}
+                    </div>
                   </td>
                 </tr>
               ))}

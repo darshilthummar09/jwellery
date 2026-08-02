@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router';
 import {
   LayoutDashboard, Users, Sliders, Tag, Settings, Briefcase,
   UserCheck, Palette, MessageSquare, ShoppingBag, MessageCircle,
-  Bell, ClipboardList, ChevronLeft, ChevronRight, X, Gem,
+  Bell, ClipboardList, ChevronLeft, ChevronRight, X, Gem, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRole } from '../../hooks/useRole';
@@ -17,7 +17,7 @@ import { useChatNotification } from '../../context/ChatNotificationContext';
 const ICON_MAP: Record<string, React.ElementType> = {
   LayoutDashboard, Users, Sliders, Tag, Settings, Briefcase,
   UserCheck, Palette, MessageSquare, ShoppingBag, MessageCircle,
-  Bell, ClipboardList,
+  Bell, ClipboardList, Sparkles,
 };
 
 interface SidebarProps {

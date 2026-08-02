@@ -1,18 +1,21 @@
 import { CheckCheck } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 import { AppNotification } from '../../context/ChatNotificationContext';
 
+interface NotificationsViewProps {
+  notifications: AppNotification[];
+  onMarkAllRead: () => void;
+  onMarkRead: (n: AppNotification) => void;
+}
+
 function NotificationsView({
   notifications,
   onMarkAllRead,
   onMarkRead,
-}: {
-  notifications: AppNotification[];
-  onMarkAllRead: () => void;
-  onMarkRead: (id: number) => void;
-}) {
+}: NotificationsViewProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -31,7 +34,7 @@ function NotificationsView({
           notifications.map((n) => (
             <div
               key={n.id}
-              onClick={() => onMarkRead(n.id)}
+              onClick={() => onMarkRead(n)}
               className={`flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-colors cursor-pointer ${n.read ? 'opacity-60' : ''}`}
             >
               <div className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${n.read ? 'bg-slate-200' : 'bg-emerald-500'}`} />
@@ -50,7 +53,17 @@ function NotificationsView({
 
 export function CustomerNotificationsPage() {
   const { notifications, markAllNotificationsRead, markNotificationRead } = useChatNotification();
+  const navigate = useNavigate();
   const myNotifications = notifications.filter((n) => n.role === 'customer');
+
+  const handleNotificationClick = (n: AppNotification) => {
+    markNotificationRead(n.id);
+    if (n.type === 'chat' && n.threadId) {
+      navigate(`/dashboard/customer/chat`);
+    } else if (n.type === 'project' && n.projectId) {
+      navigate(`/dashboard/customer/my-products?id=${n.projectId}`);
+    }
+  };
 
   return (
     <PageContainer>
@@ -58,7 +71,7 @@ export function CustomerNotificationsPage() {
       <NotificationsView
         notifications={myNotifications}
         onMarkAllRead={() => markAllNotificationsRead('customer')}
-        onMarkRead={markNotificationRead}
+        onMarkRead={handleNotificationClick}
       />
     </PageContainer>
   );

@@ -95,34 +95,36 @@ export function CustomersPage() {
         {filteredCustomers.length === 0 ? (
           <EmptyState title="No customers found" description="Try another search or add a new customer." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Customer</th>
-                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Orders</th>
-                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Total Spent</th>
-                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Joined</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filteredCustomers.map((customer) => (
-                <tr key={customer.id} onClick={() => setSelectedCustomer(customer)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar user={{ name: customer.name }} size="sm" />
-                      <div>
-                        <div className="font-medium text-slate-800">{customer.name}</div>
-                        <div className="text-xs text-slate-400">{customer.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">{customer.orders}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-800">{customer.spent}</td>
-                  <td className="px-6 py-4 text-slate-400 text-xs">{customer.joined}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Orders</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Total Spent</th>
+                  <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Joined</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredCustomers.map((customer) => (
+                  <tr key={customer.id} onClick={() => setSelectedCustomer(customer)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <Avatar user={{ name: customer.name }} size="sm" />
+                        <div>
+                          <div className="font-medium text-slate-800">{customer.name}</div>
+                          <div className="text-xs text-slate-400">{customer.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 whitespace-nowrap">{customer.orders}</td>
+                    <td className="px-6 py-4 font-semibold text-slate-800 whitespace-nowrap">{customer.spent}</td>
+                    <td className="px-6 py-4 text-slate-400 text-xs whitespace-nowrap">{customer.joined}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

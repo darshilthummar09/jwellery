@@ -103,7 +103,31 @@ function NotificationBell() {
                 myNotifications.map((n) => (
                   <div
                     key={n.id}
-                    onClick={() => markNotificationRead(n.id)}
+                    onClick={() => {
+                      markNotificationRead(n.id);
+                      setOpen(false);
+                      if (n.type === 'chat' && n.threadId) {
+                        if (role === 'admin') {
+                          navigate(`/dashboard/admin/chats?thread=${encodeURIComponent(n.threadId)}`);
+                        } else if (role === 'customer') {
+                          navigate(`/dashboard/customer/chat`);
+                        } else if (role === 'designer') {
+                          navigate(`/dashboard/designer/chat`);
+                        }
+                      } else if (n.type === 'order' && n.projectId) {
+                        if (role === 'admin') {
+                          navigate(`/dashboard/admin/projects?id=${n.projectId}`);
+                        }
+                      } else if (n.type === 'project' && n.projectId) {
+                        if (role === 'admin') {
+                          navigate(`/dashboard/admin/projects?id=${n.projectId}`);
+                        } else if (role === 'customer') {
+                          navigate(`/dashboard/customer/my-products?id=${n.projectId}`);
+                        } else if (role === 'designer') {
+                          navigate(`/dashboard/designer/assigned-projects?id=${n.projectId}`);
+                        }
+                      }
+                    }}
                     className={`px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors cursor-pointer ${n.read ? 'opacity-60' : ''}`}
                   >
                     {!n.read && (

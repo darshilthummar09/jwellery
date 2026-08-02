@@ -35,33 +35,35 @@ export function UsersPage() {
 
       {/* Users Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-100">
-              <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">User</th>
-              <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Username</th>
-              <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Role</th>
-              <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Email</th>
-              <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider">Joined</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {MOCK_USERS.map((u) => (
-              <tr key={u.id} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar user={u} size="sm" />
-                    <span className="font-medium text-slate-800">{u.name}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-slate-500 font-mono text-xs">{u.username}</td>
-                <td className="px-6 py-4"><RoleBadge role={u.role} /></td>
-                <td className="px-6 py-4 text-slate-500">{u.email}</td>
-                <td className="px-6 py-4 text-slate-400 text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100">
+                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">User</th>
+                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Username</th>
+                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Role</th>
+                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Email</th>
+                <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Joined</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {MOCK_USERS.map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <Avatar user={u} size="sm" />
+                      <span className="font-medium text-slate-800">{u.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-slate-500 font-mono text-xs whitespace-nowrap">{u.username}</td>
+                  <td className="px-6 py-4 whitespace-nowrap"><RoleBadge role={u.role} /></td>
+                  <td className="px-6 py-4 text-slate-500 whitespace-nowrap">{u.email}</td>
+                  <td className="px-6 py-4 text-slate-400 text-xs whitespace-nowrap">{new Date(u.createdAt).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </PageContainer>
   );

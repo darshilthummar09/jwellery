@@ -24,10 +24,11 @@ export const ADMIN_NAV: NavItem[] = [
 ];
 
 export const CUSTOMER_NAV: NavItem[] = [
-  { label: 'Dashboard',     path: '/dashboard/customer',                icon: 'LayoutDashboard', description: 'Your overview' },
-  { label: 'My Products',   path: '/dashboard/customer/my-products',    icon: 'ShoppingBag',     description: 'Your orders & products' },
-  { label: 'General Chat',  path: '/dashboard/customer/chat',           icon: 'MessageCircle',   description: 'Chat with support' },
-  { label: 'Notifications', path: '/dashboard/customer/notifications',  icon: 'Bell',            description: 'Your notifications' },
+  { label: 'Dashboard',        path: '/dashboard/customer',                icon: 'LayoutDashboard', description: 'Your overview' },
+  { label: 'AI Design Studio', path: '/dashboard/customer/ai-studio',       icon: 'Sparkles',        description: 'Co-create with AI' },
+  { label: 'My Products',      path: '/dashboard/customer/my-products',    icon: 'ShoppingBag',     description: 'Your orders & products' },
+  { label: 'General Chat',     path: '/dashboard/customer/chat',           icon: 'MessageCircle',   description: 'Chat with support' },
+  { label: 'Notifications',    path: '/dashboard/customer/notifications',  icon: 'Bell',            description: 'Your notifications' },
 ];
 
 export const DESIGNER_NAV: NavItem[] = [

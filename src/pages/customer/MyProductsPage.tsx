@@ -119,7 +119,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${cfg.bg} ${cfg.text} ${cfg.border}`}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap flex-shrink-0 ${cfg.bg} ${cfg.text} ${cfg.border}`}
     >
       {cfg.icon}
       {status}
@@ -133,7 +133,7 @@ function ProductCard({ project }: { project: Project }) {
   const emoji = CATEGORY_EMOJIS[project.category] || '👑';
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all overflow-hidden flex flex-col">
+    <div id={`project-card-${project.id}`} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all overflow-hidden flex flex-col">
       {/* Cover */}
       <div className="h-40 bg-gradient-to-br from-slate-50 to-emerald-50/50 flex items-center justify-center text-6xl select-none overflow-hidden relative">
         {project.image ? (
@@ -264,6 +264,28 @@ export function MyProductsPage() {
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('new');
       setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Scroll and highlight project from query param ?id=...
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      const timer = setTimeout(() => {
+        const element = document.getElementById(`project-card-${id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('ring-2', 'ring-emerald-500', 'scale-[1.01]');
+          setTimeout(() => {
+            element.classList.remove('ring-2', 'ring-emerald-500', 'scale-[1.01]');
+          }, 3000);
+        }
+      }, 300);
+
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('id');
+      setSearchParams(newParams, { replace: true });
+      return () => clearTimeout(timer);
     }
   }, [searchParams, setSearchParams]);
 
