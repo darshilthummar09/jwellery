@@ -209,6 +209,18 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const channelRef = useRef<BroadcastChannel | null>(null);
   const initialStateRef = useRef({ threads, projects, notifications, notifCounter });
 
+  const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
+    const items = Array.isArray(n) ? n : [n];
+    setNotifications((prev) => {
+      const newItems = items.map((item, idx) => ({
+        ...item,
+        id: Date.now() + idx,
+      }));
+      return [...newItems, ...prev];
+    });
+    setNotifCounter((c) => c + items.length);
+  }, []);
+
   const nowTime = () =>
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -841,17 +853,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setNotifications((prev) => prev.filter((n) => n.role !== as || !isChatNotification(n)));
   }, []);
 
-  const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
-    const items = Array.isArray(n) ? n : [n];
-    setNotifications((prev) => {
-      const newItems = items.map((item, idx) => ({
-        ...item,
-        id: Date.now() + idx,
-      }));
-      return [...newItems, ...prev];
-    });
-    setNotifCounter((c) => c + items.length);
-  }, []);
+
 
   const markAllNotificationsRead = useCallback((role: 'customer' | 'admin' | 'designer') => {
     setNotifications((prev) => prev.map((n) => (n.role === role ? { ...n, read: true } : n)));
