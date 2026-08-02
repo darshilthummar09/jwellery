@@ -8,6 +8,7 @@ import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Project, ProjectStatus, useChatNotification } from '../../context/ChatNotificationContext';
 import { useAuth } from '../../hooks/useAuth';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   'Pending Approval': 'bg-orange-100 text-orange-700',
@@ -40,10 +41,11 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { projects, ensureDesignerThread, upsertProject, approveProject, rejectProject } = useChatNotification();
+  const { projects, ensureDesignerThread, upsertProject, approveProject, rejectProject, deleteProject } = useChatNotification();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [rejectingProject, setRejectingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | ProjectStatus>('All');
 
@@ -235,6 +237,7 @@ export function ProjectsPage() {
                   )}
                   <button onClick={() => setEditingProject(selectedProject)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">Edit Project</button>
                   <button onClick={openDesignerChat} className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-colors">Message Designer</button>
+                  <button onClick={() => setDeletingProject(selectedProject)} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded-xl transition-colors">Delete</button>
                 </>
               }
             >
@@ -320,22 +323,33 @@ export function ProjectsPage() {
       {rejectingProject && (
         <Modal title="Reject Project" subtitle={rejectingProject.name} onClose={() => setRejectingProject(null)}>
           <form onSubmit={handleRejectProject} className="space-y-4">
-            <label className="text-sm font-medium text-slate-700">
-              Reason shared with customer
-              <textarea
-                value={rejectionReason}
-                onChange={(event) => setRejectionReason(event.target.value)}
-                rows={3}
-                placeholder="Optional reason for rejection"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-              />
-            </label>
+            <label className="block text-sm font-medium text-slate-700">Reason for Rejection</label>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Optional explanation for the customer..."
+              className="w-full h-32 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10 resize-none transition-all"
+            />
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={() => setRejectingProject(null)} className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold rounded-xl transition-colors">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">Reject Project</button>
             </div>
           </form>
         </Modal>
+      )}
+
+      {deletingProject && (
+        <ConfirmModal
+          title="Delete Project"
+          message={`Are you sure you want to delete ${deletingProject.name}? This action cannot be undone.`}
+          confirmLabel="Delete Project"
+          onConfirm={() => {
+            deleteProject(deletingProject.id);
+            setDeletingProject(null);
+            setSelectedProject(null);
+          }}
+          onClose={() => setDeletingProject(null)}
+        />
       )}
     </PageContainer>
   );

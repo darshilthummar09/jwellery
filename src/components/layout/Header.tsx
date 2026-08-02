@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router';
-import { Menu, Bell, Search, ChevronDown, LogOut, User as UserIcon, Settings } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useRole } from '../../hooks/useRole';
+import { 
+  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Settings,
+  Home, FolderKanban, MessageSquare, Users, Palette,
+  Sparkles, Package, Shield
+} from 'lucide-react';
 import { Avatar } from '../common/Avatar';
 import { RoleBadge } from '../common/Badge';
-import { Breadcrumb } from './Breadcrumb';
+import { Modal } from '../common/Modal';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 
 
@@ -164,6 +168,8 @@ function UserDropdown() {
   const { role } = useRole();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -214,11 +220,17 @@ function UserDropdown() {
 
           {/* Menu items */}
           <div className="py-1.5">
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+            <button 
+              onClick={() => { setProfileModalOpen(true); setOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            >
               <UserIcon size={15} className="text-slate-400" />
               My Profile
             </button>
-            <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+            <button 
+              onClick={() => { setPreferencesModalOpen(true); setOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            >
               <Settings size={15} className="text-slate-400" />
               Preferences
             </button>
@@ -235,6 +247,62 @@ function UserDropdown() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Profile Modal */}
+      {profileModalOpen && (
+        <Modal title="My Profile" onClose={() => setProfileModalOpen(false)}>
+          <div className="space-y-4">
+            <div className="flex flex-col items-center gap-3 pb-4 border-b border-slate-100">
+              <Avatar user={user} size="lg" />
+              <div className="text-center">
+                <div className="font-bold text-slate-800 text-lg">{user?.name}</div>
+                <div className="text-sm text-slate-500 mb-2">{user?.email}</div>
+                {role && <RoleBadge role={role} />}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">
+                Full Name
+                <input type="text" defaultValue={user?.name} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Email
+                <input type="email" defaultValue={user?.email} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setProfileModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Cancel</button>
+              <button onClick={() => setProfileModalOpen(false)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">Save Changes</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Preferences Modal */}
+      {preferencesModalOpen && (
+        <Modal title="Preferences" onClose={() => setPreferencesModalOpen(false)}>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <label className="flex items-center justify-between text-sm font-medium text-slate-700 cursor-pointer">
+                <span>Email Notifications</span>
+                <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" />
+              </label>
+              <label className="flex items-center justify-between text-sm font-medium text-slate-700 cursor-pointer">
+                <span>In-App Notifications</span>
+                <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" />
+              </label>
+              <label className="flex items-center justify-between text-sm font-medium text-slate-700 cursor-pointer">
+                <span>Dark Mode</span>
+                <input type="checkbox" className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <button onClick={() => setPreferencesModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Cancel</button>
+              <button onClick={() => setPreferencesModalOpen(false)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">Save Preferences</button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

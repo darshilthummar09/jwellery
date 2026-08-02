@@ -121,6 +121,7 @@ interface ChatNotificationContextValue {
   upsertProject: (project: Project) => void;
   approveProject: (projectId: string) => void;
   rejectProject: (projectId: string, reason?: string) => void;
+  deleteProject: (projectId: string) => void;
   addNotification: (n: Omit<AppNotification, 'id'>) => void;
   markAllNotificationsRead: (role: 'customer' | 'admin' | 'designer') => void;
   markNotificationRead: (id: number) => void;
@@ -723,6 +724,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     ]);
   }, [projects, addNotification]);
 
+  const deleteProject = useCallback((projectId: string) => {
+    setProjects((current) => current.filter((item) => item.id !== projectId));
+  }, []);
+
   const rejectProject = useCallback((projectId: string, reason?: string) => {
     const project = projects.find((item) => item.id === projectId);
     if (!project) return;
@@ -958,6 +963,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         upsertProject,
         approveProject,
         rejectProject,
+        deleteProject,
         addNotification,
         markAllNotificationsRead,
         markNotificationRead,

@@ -8,6 +8,7 @@ import { Badge } from '../../components/common/Badge';
 import { DetailCard } from '../../components/common/DetailCard';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Modal } from '../../components/common/Modal';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 
 interface Designer {
@@ -47,6 +48,7 @@ export function DesignersPage() {
   const [search, setSearch] = useState('');
   const [selectedDesigner, setSelectedDesigner] = useState<Designer | null>(null);
   const [draftDesigner, setDraftDesigner] = useState<Designer | null>(null);
+  const [deletingDesigner, setDeletingDesigner] = useState<Designer | null>(null);
 
   const filteredDesigners = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -136,10 +138,15 @@ export function DesignersPage() {
                 { label: 'Availability', value: selectedDesigner.status },
               ]}
               actions={
-                <button onClick={() => messageDesigner(selectedDesigner)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
-                  <MessageSquare size={14} />
-                  Message Designer
-                </button>
+                <>
+                  <button onClick={() => messageDesigner(selectedDesigner)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                    <MessageSquare size={14} />
+                    Message Designer
+                  </button>
+                  <button onClick={() => setDeletingDesigner(selectedDesigner)} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded-xl transition-colors">
+                    Delete
+                  </button>
+                </>
               }
             />
           </div>
@@ -175,6 +182,20 @@ export function DesignersPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deletingDesigner && (
+        <ConfirmModal
+          title="Delete Designer"
+          message={`Are you sure you want to delete ${deletingDesigner.name}? This action cannot be undone.`}
+          confirmLabel="Delete Designer"
+          onConfirm={() => {
+            setDesigners((prev) => prev.filter((d) => d.id !== deletingDesigner.id));
+            setDeletingDesigner(null);
+            setSelectedDesigner(null);
+          }}
+          onClose={() => setDeletingDesigner(null)}
+        />
       )}
     </PageContainer>
   );

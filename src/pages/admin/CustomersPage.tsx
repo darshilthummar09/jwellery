@@ -7,6 +7,7 @@ import { Avatar } from '../../components/common/Avatar';
 import { DetailCard } from '../../components/common/DetailCard';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Modal } from '../../components/common/Modal';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 
 interface Customer {
@@ -40,6 +41,7 @@ export function CustomersPage() {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [draftCustomer, setDraftCustomer] = useState<Customer | null>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
 
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -143,10 +145,15 @@ export function CustomersPage() {
                 { label: 'Joined', value: selectedCustomer.joined },
               ]}
               actions={
-                <button onClick={() => messageCustomer(selectedCustomer)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
-                  <MessageSquare size={14} />
-                  Message Customer
-                </button>
+                <>
+                  <button onClick={() => messageCustomer(selectedCustomer)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                    <MessageSquare size={14} />
+                    Message Customer
+                  </button>
+                  <button onClick={() => setDeletingCustomer(selectedCustomer)} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded-xl transition-colors">
+                    Delete
+                  </button>
+                </>
               }
             />
           </div>
@@ -178,6 +185,20 @@ export function CustomersPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deletingCustomer && (
+        <ConfirmModal
+          title="Delete Customer"
+          message={`Are you sure you want to delete ${deletingCustomer.name}? This action cannot be undone.`}
+          confirmLabel="Delete Customer"
+          onConfirm={() => {
+            setCustomers((prev) => prev.filter((c) => c.id !== deletingCustomer.id));
+            setDeletingCustomer(null);
+            setSelectedCustomer(null);
+          }}
+          onClose={() => setDeletingCustomer(null)}
+        />
       )}
     </PageContainer>
   );
