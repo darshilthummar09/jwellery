@@ -207,6 +207,12 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const [notifications, setNotifications] = useState<AppNotification[]>(storedState?.notifications ?? INITIAL_NOTIFICATIONS);
   const [notifCounter, setNotifCounter] = useState(storedState?.notifCounter ?? 9000);
   const [remoteReady, setRemoteReady] = useState(!isFirebaseConfigured);
+  // True only once Firebase has actually confirmed the current remote value (or
+  // there's no remote to confirm). Distinct from remoteReady, which also flips
+  // true on a connection *timeout* -- without this guard, a slow/denied
+  // connection could let the persist effect below push this device's local
+  // snapshot to Firebase and clobber real remote data before ever seeing it.
+  const remoteHydratedRef = useRef(!isFirebaseConfigured);
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const lastSerializedStateRef = useRef('');
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -315,6 +321,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       unsubscribeFirebase = onValue(chatStateRef, (snapshot) => {
         if (fallbackTimer) clearTimeout(fallbackTimer);
+        remoteHydratedRef.current = true;
         const value = snapshot.val() as StoredChatState | null;
         if (value) {
           const sanitized = removeDeletedSeedData(value);
@@ -362,8 +369,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       state: serialized,
     });
 
-    // Write to Firebase only if remote is ready
-    if (remoteReady && firebaseDatabase) {
+    // Write to Firebase only once we've actually confirmed the remote value at
+    // least once -- never on a bare connection-timeout fallback, which could
+    // otherwise push this device's (possibly empty/stale) local snapshot over
+    // real remote data it never got to see.
+    if (remoteReady && remoteHydratedRef.current && firebaseDatabase) {
       try {
         const cleanState = JSON.parse(serialized);
         set(ref(firebaseDatabase, 'chatState'), cleanState);
