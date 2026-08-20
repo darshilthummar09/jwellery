@@ -253,7 +253,6 @@ export function OrdersPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">ID</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Order</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Designer</th>
@@ -267,7 +266,6 @@ export function OrdersPage() {
                 <tbody className="divide-y divide-slate-50">
                   {filteredOrders.map((order) => (
                     <tr key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
-                      <td className="px-6 py-4 font-mono text-xs text-slate-400 whitespace-nowrap">{order.id}</td>
                       <td className="px-6 py-4 font-medium text-slate-800">{order.name}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.customerName}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.designerName}</td>
@@ -320,8 +318,7 @@ export function OrdersPage() {
                   }}
                   className="w-full text-left px-4 py-4 active:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="font-mono text-[11px] text-slate-400">{order.id}</span>
+                  <div className="mb-1.5">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[order.status]}`}>
                       {order.status}
                     </span>
@@ -359,7 +356,7 @@ export function OrdersPage() {
           <div className="w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
             <DetailCard
               title={selectedOrder.name}
-              subtitle={`${selectedOrder.id} - ${selectedOrder.category}`}
+              subtitle={selectedOrder.category}
               className="shadow-2xl h-full sm:h-auto sm:rounded-2xl rounded-none"
               onClose={() => setSelectedOrder(null)}
               badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[selectedOrder.status]}`}>{selectedOrder.status}</span>}
@@ -374,7 +371,6 @@ export function OrdersPage() {
                 { label: 'Size', value: selectedOrder.size || 'Not specified' },
                 { label: 'Weight', value: selectedOrder.weight || 'Not specified' },
                 { label: 'Progress', value: selectedOrder.progress },
-                { label: 'Order ID', value: <span className="font-mono text-xs">{selectedOrder.id}</span> },
               ]}
               actions={
                 <>
@@ -419,7 +415,7 @@ export function OrdersPage() {
       )}
 
       {editingOrder && (
-        <Modal title={orders.some((order) => order.id === editingOrder.id) ? 'Edit Order' : 'New Order'} subtitle={editingOrder.id} onClose={() => setEditingOrder(null)}>
+        <Modal title={orders.some((order) => order.id === editingOrder.id) ? 'Edit Order' : 'New Order'} onClose={() => setEditingOrder(null)}>
           <form onSubmit={saveOrder} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               ['Order Name', 'name'],
