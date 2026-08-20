@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Check, Clock, Filter, Plus, X, CalendarRange } from 'lucide-react';
+import { Check, Clock, Filter, Plus, X, CalendarRange, Image as ImageIcon } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { DetailCard } from '../../components/common/DetailCard';
@@ -29,6 +29,18 @@ const PRIORITY_VARIANT: Record<Order['priority'], 'danger' | 'warning' | 'muted'
 
 function PriorityBadge({ priority }: { priority: Order['priority'] }) {
   return <Badge variant={PRIORITY_VARIANT[priority]}>{priority}</Badge>;
+}
+
+function OrderThumb({ order, size = 'sm' }: { order: Order; size?: 'sm' | 'md' }) {
+  const dimension = size === 'md' ? 'w-14 h-14' : 'w-10 h-10';
+  if (order.image) {
+    return <img src={order.image} alt={order.name} className={`${dimension} rounded-lg object-cover border border-slate-200 flex-shrink-0`} />;
+  }
+  return (
+    <div className={`${dimension} rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 flex-shrink-0`}>
+      <ImageIcon size={size === 'md' ? 20 : 16} />
+    </div>
+  );
 }
 
 const emptyOrder = (nextId: string): Order => ({
@@ -253,6 +265,7 @@ export function OrdersPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Image</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Order</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Designer</th>
@@ -266,6 +279,7 @@ export function OrdersPage() {
                 <tbody className="divide-y divide-slate-50">
                   {filteredOrders.map((order) => (
                     <tr key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
+                      <td className="px-6 py-4"><OrderThumb order={order} /></td>
                       <td className="px-6 py-4 font-medium text-slate-800">{order.name}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.customerName}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.designerName}</td>
@@ -318,21 +332,26 @@ export function OrdersPage() {
                   }}
                   className="w-full text-left px-4 py-4 active:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  <div className="mb-1.5">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[order.status]}`}>
-                      {order.status}
-                    </span>
-                  </div>
-                  <p className="font-semibold text-slate-800 text-sm mb-1">{order.name}</p>
-                  <p className="text-xs text-slate-500 mb-2">{order.customerName} · {order.designerName}</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <PriorityBadge priority={order.priority} />
-                      <span className="flex items-center gap-1 text-xs text-slate-400">
-                        <Clock size={11} /> {order.created}
-                      </span>
+                  <div className="flex gap-3">
+                    <OrderThumb order={order} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <div className="mb-1.5">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[order.status]}`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-slate-800 text-sm mb-1">{order.name}</p>
+                      <p className="text-xs text-slate-500 mb-2">{order.customerName} · {order.designerName}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <PriorityBadge priority={order.priority} />
+                          <span className="flex items-center gap-1 text-xs text-slate-400">
+                            <Clock size={11} /> {order.created}
+                          </span>
+                        </div>
+                        <span className="font-semibold text-slate-700 text-sm">{order.budget}</span>
+                      </div>
                     </div>
-                    <span className="font-semibold text-slate-700 text-sm">{order.budget}</span>
                   </div>
                   {order.status === 'Pending Approval' && (
                     <div className="flex gap-2 mt-3" onClick={(event) => event.stopPropagation()}>

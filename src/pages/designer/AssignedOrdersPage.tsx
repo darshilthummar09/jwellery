@@ -90,7 +90,6 @@ export function AssignedOrdersPage() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="text-xs font-mono text-slate-400">{order.id}</span>
                     <Badge variant={PRIORITY_VARIANT[order.priority]}>{order.priority} Priority</Badge>
                   </div>
                   <h3 className="text-base font-bold text-slate-800">{order.name}</h3>
@@ -118,7 +117,7 @@ export function AssignedOrdersPage() {
         <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setUpdatingOrder(null)}>
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-100 p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <h3 className="text-base font-bold text-slate-800 mb-1">Update Order Status</h3>
-            <p className="text-xs text-slate-400 mb-4">{updatingOrder.name} ({updatingOrder.id})</p>
+            <p className="text-xs text-slate-400 mb-4">{updatingOrder.name}</p>
 
             <form onSubmit={handleStatusUpdate} className="space-y-4">
               <label className="block text-sm font-medium text-slate-700">
@@ -161,7 +160,7 @@ export function AssignedOrdersPage() {
           <div className="w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
             <DetailCard
               title={selectedOrder.name}
-              subtitle={`${selectedOrder.id} - ${selectedOrder.category}`}
+              subtitle={selectedOrder.category}
               className="shadow-2xl h-full sm:h-auto sm:rounded-2xl rounded-none"
               onClose={() => setSelectedOrder(null)}
               badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[selectedOrder.status] ?? 'bg-slate-100 text-slate-700'}`}>{selectedOrder.status}</span>}
@@ -174,7 +173,6 @@ export function AssignedOrdersPage() {
                 { label: 'Size', value: selectedOrder.size || 'Not specified' },
                 { label: 'Weight', value: selectedOrder.weight || 'Not specified' },
                 { label: 'Progress', value: selectedOrder.progress },
-                { label: 'Order ID', value: <span className="font-mono text-xs">{selectedOrder.id}</span> },
               ]}
               actions={
                 <button
