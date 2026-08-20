@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Check, Clock, Filter, Plus, X, CalendarRange, Image as ImageIcon } from 'lucide-react';
+import { Check, Clock, Filter, Plus, X, CalendarRange, Image as ImageIcon, FileDown, Send } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { DetailCard } from '../../components/common/DetailCard';
@@ -11,6 +11,7 @@ import { Order, OrderStatus, useChatNotification } from '../../context/ChatNotif
 import { useAuth } from '../../hooks/useAuth';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
+import { generateOrderPdf } from '../../utils/orderPdf';
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
   'Pending Approval': 'bg-orange-100 text-orange-700',
@@ -65,12 +66,13 @@ export function OrdersPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { orders, ensureDesignerThread, upsertOrder, approveOrder, rejectOrder, deleteOrder } = useChatNotification();
+  const { orders, ensureDesignerThread, sendAdminMessage, upsertOrder, approveOrder, rejectOrder, deleteOrder } = useChatNotification();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [pdfBusyOrderId, setPdfBusyOrderId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'All' | OrderStatus>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | Order['priority']>('All');
   const [dateFrom, setDateFrom] = useState('');
@@ -154,7 +156,7 @@ export function OrdersPage() {
 
   const handleApproveOrder = (order: Order) => {
     approveOrder(order.id);
-    setSelectedOrder({ ...order, status: 'Approved', progress: order.progress === '0%' ? '10%' : order.progress });
+    setSelectedOrder({ ...order, status: 'Approved' });
   };
 
   const handleRejectOrder = (event: FormEvent) => {
@@ -166,6 +168,43 @@ export function OrdersPage() {
     setRejectingOrder(null);
     setRejectionReason('');
   };
+
+  // Always regenerated fresh from the current order fields (never cached) so that
+  // if the admin edits missing/wrong info first, the PDF reflects that latest data.
+  const handleGeneratePdf = async (order: Order) => {
+    setPdfBusyOrderId(order.id);
+    try {
+      const { dataUri, fileName } = await generateOrderPdf(order, user?.name ?? 'Admin');
+      const link = document.createElement('a');
+      link.href = dataUri;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setPdfBusyOrderId(null);
+    }
+  };
+
+  const handleSendPdfToDesigner = async (order: Order) => {
+    setPdfBusyOrderId(order.id);
+    try {
+      const { dataUri, fileName } = await generateOrderPdf(order, user?.name ?? 'Admin');
+      const threadId = ensureDesignerThread(order.designerName, order.name);
+      sendAdminMessage(
+        threadId,
+        `📎 Design brief for "${order.name}" — full order details and images attached as PDF.`,
+        [{ id: Date.now(), name: fileName, size: Math.round((dataUri.length * 3) / 4), type: 'application/pdf', url: dataUri, kind: 'file' }]
+      );
+      setSelectedOrder(null);
+      const chatsPath = user?.role === 'super-admin' ? '/dashboard/super-admin/chats' : '/dashboard/admin/chats';
+      navigate(`${chatsPath}?thread=${encodeURIComponent(threadId)}`);
+    } finally {
+      setPdfBusyOrderId(null);
+    }
+  };
+
+  const canGeneratePdf = (order: Order) => order.status !== 'Pending Approval' && order.status !== 'Rejected';
 
   return (
     <PageContainer>
@@ -405,6 +444,24 @@ export function OrdersPage() {
                   )}
                   <button onClick={() => setEditingOrder(selectedOrder)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">Edit Order</button>
                   <button onClick={openDesignerChat} className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-colors">Message Designer</button>
+                  {canGeneratePdf(selectedOrder) && (
+                    <>
+                      <button
+                        onClick={() => handleGeneratePdf(selectedOrder)}
+                        disabled={pdfBusyOrderId === selectedOrder.id}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-100 disabled:opacity-60 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-colors"
+                      >
+                        <FileDown size={14} /> {pdfBusyOrderId === selectedOrder.id ? 'Generating…' : 'Generate PDF'}
+                      </button>
+                      <button
+                        onClick={() => handleSendPdfToDesigner(selectedOrder)}
+                        disabled={pdfBusyOrderId === selectedOrder.id}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold rounded-xl transition-colors"
+                      >
+                        <Send size={14} /> {pdfBusyOrderId === selectedOrder.id ? 'Sending…' : 'Send PDF to Designer'}
+                      </button>
+                    </>
+                  )}
                   <button onClick={() => setDeletingOrder(selectedOrder)} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded-xl transition-colors">Delete</button>
                 </>
               }

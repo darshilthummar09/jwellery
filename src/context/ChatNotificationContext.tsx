@@ -227,6 +227,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const nowTime = () =>
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+  // Date.now() alone can collide when two messages are created in the same
+  // synchronous tick (e.g. ensureDesignerThread immediately followed by
+  // sendAdminMessage) -- jitter keeps ids unique for React keys / lookups.
+  const newMessageId = () => Date.now() + Math.floor(Math.random() * 1000);
+
   const getThreadByCustomer = useCallback(
     (customerId: string) => threads.find((t) => t.customerId === customerId),
     [threads]
@@ -368,26 +373,6 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     }
   }, [threads, orders, notifications, notifCounter, remoteReady]);
 
-  const buildOrderDetailsText = (order: Order) => {
-    const lines = [
-      `Order: ${order.name}`,
-      `Customer: ${order.customerName}`,
-      `Category: ${order.category}`,
-      `Metal: ${order.metal} (${order.karat})`,
-      `Budget: ${order.budget}`,
-      `Due: ${order.due}`,
-      `Priority: ${order.priority}`,
-      `Order ID: ${order.id}`,
-    ];
-
-    if (order.size) lines.push(`Size: No. ${order.size}`);
-    if (order.weight) lines.push(`Weight: ${order.weight}`);
-    if (order.notes) lines.push(`Notes: ${order.notes}`);
-    if (order.image) lines.push('Sample image/sketch attached in the customer order.');
-
-    return lines.join('\n');
-  };
-
   const ensureDesignerThread = useCallback((designerName: string, orderName?: string) => {
     const threadId = createDesignerThreadId(designerName);
 
@@ -405,7 +390,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         participantRole: 'designer',
         messages: [
           {
-            id: Date.now(),
+            id: newMessageId(),
             from: 'admin',
             senderName: 'Dream Jewels Support',
             text: introText,
@@ -621,109 +606,26 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     }
   }, [orders, addNotification]);
 
+  // Approval only flips the status. It does NOT message or push data to the
+  // designer -- that only happens when the admin explicitly generates and
+  // sends a PDF brief (see OrdersPage's Generate/Send PDF actions).
   const approveOrder = useCallback((orderId: string) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
 
-    const approvedOrder: Order = {
-      ...order,
-      status: 'Approved',
-      progress: order.progress === '0%' ? '10%' : order.progress,
-    };
-
     setOrders((current) =>
-      current.map((item) => (item.id === orderId ? approvedOrder : item))
+      current.map((item) => (item.id === orderId ? { ...item, status: 'Approved' as const } : item))
     );
 
-    const designerThreadId = createDesignerThreadId(approvedOrder.designerName);
-
-    // Extract and format customer images into chat attachments
-    const attachments: ChatAttachment[] = [];
-    if (approvedOrder.image) {
-      attachments.push({
-        id: Date.now() + 999,
-        name: `${approvedOrder.name}_design.png`,
-        size: 450000,
-        type: 'image/png',
-        url: approvedOrder.image,
-        kind: 'image',
-      });
-    }
-    if (approvedOrder.images && approvedOrder.images.length > 0) {
-      approvedOrder.images.forEach((img, idx) => {
-        if (img.url !== approvedOrder.image) {
-          attachments.push({
-            id: Date.now() + idx,
-            name: img.name || `attachment_${idx}.png`,
-            size: img.size || 200000,
-            type: img.type || 'image/png',
-            url: img.url,
-            kind: 'image',
-          });
-        }
-      });
-    }
-
-    const detailText = `Approved order assigned:\n${buildOrderDetailsText(approvedOrder)}`;
-    const msg: ChatMessage = {
-      id: Date.now(),
-      from: 'admin',
-      senderName: 'Dream Jewels Support',
-      text: detailText,
-      time: nowTime(),
-      attachments: attachments.length > 0 ? attachments : undefined,
-      seenBy: [],
-    };
-
-    setThreads((prev) =>
-      prev.some((thread) => thread.id === designerThreadId)
-        ? prev.map((thread) =>
-            thread.id === designerThreadId
-              ? {
-                  ...thread,
-                  messages: [...thread.messages, msg],
-                  customerUnread: thread.customerUnread + 1,
-                  lastMessage: `Assigned: ${approvedOrder.name}`,
-                  lastTime: 'Just now',
-                }
-              : thread
-          )
-        : [
-            {
-              id: designerThreadId,
-              customerName: approvedOrder.designerName,
-              customerId: designerThreadId,
-              participantRole: 'designer',
-              messages: [msg],
-              unread: 0,
-              customerUnread: 1,
-              lastMessage: `Assigned: ${approvedOrder.name}`,
-              lastTime: 'Just now',
-            },
-            ...prev,
-          ]
-    );
-
-    addNotification([
-      {
-        role: 'customer',
-        title: `Order approved: ${approvedOrder.name}`,
-        body: 'Your custom order has been approved and moved into design.',
-        time: 'Just now',
-        read: false,
-        type: 'order',
-        orderId: approvedOrder.id,
-      },
-      {
-        role: 'designer',
-        title: `New order assigned: ${approvedOrder.name}`,
-        body: `${approvedOrder.customerName}'s full order details are ready for design.`,
-        time: 'Just now',
-        read: false,
-        type: 'order',
-        orderId: approvedOrder.id,
-      }
-    ]);
+    addNotification({
+      role: 'customer',
+      title: `Order approved: ${order.name}`,
+      body: 'Your custom order has been approved and moved into design.',
+      time: 'Just now',
+      read: false,
+      type: 'order',
+      orderId: order.id,
+    });
   }, [orders, addNotification]);
 
   const deleteOrder = useCallback((orderId: string) => {
@@ -760,7 +662,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const sendCustomerMessage = useCallback(
     (customerId: string, customerName: string, text: string, optionalThreadId?: string) => {
       const msg: ChatMessage = {
-        id: Date.now(),
+        id: newMessageId(),
         from: 'customer',
         senderName: customerName,
         text,
@@ -810,7 +712,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
     const msg: ChatMessage = {
-      id: Date.now(),
+      id: newMessageId(),
       from: 'designer',
       senderName: designerName,
       text,
@@ -839,7 +741,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
   const sendAdminMessage = useCallback((threadId: string, text: string, attachments: ChatAttachment[] = []) => {
     const msg: ChatMessage = {
-      id: Date.now(),
+      id: newMessageId(),
       from: 'admin',
       senderName: 'Dream Jewels Support',
       text,
