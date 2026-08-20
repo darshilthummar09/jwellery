@@ -133,8 +133,8 @@ export function DesignersPage() {
               badge={<Badge variant={STATUS_MAP[selectedDesigner.status]}>{selectedDesigner.status}</Badge>}
               fields={[
                 { label: 'Speciality', value: selectedDesigner.speciality },
-                { label: 'Active Projects', value: selectedDesigner.active },
-                { label: 'Completed Projects', value: selectedDesigner.completed },
+                { label: 'Active Orders', value: selectedDesigner.active },
+                { label: 'Completed Orders', value: selectedDesigner.completed },
                 { label: 'Availability', value: selectedDesigner.status },
               ]}
               actions={

@@ -16,7 +16,7 @@ import { SettingsPage } from '../pages/super-admin/SettingsPage';
 
 // Admin Pages
 import { AdminDashboard } from '../pages/admin/AdminDashboard';
-import { ProjectsPage } from '../pages/admin/ProjectsPage';
+import { OrdersPage } from '../pages/admin/OrdersPage';
 import { CustomersPage } from '../pages/admin/CustomersPage';
 import { DesignersPage } from '../pages/admin/DesignersPage';
 import { ChatsPage } from '../pages/admin/ChatsPage';
@@ -30,7 +30,7 @@ import { AiStudioPage } from '../pages/customer/AiStudioPage';
 
 // Designer Pages
 import { DesignerDashboard } from '../pages/designer/DesignerDashboard';
-import { AssignedProjectsPage } from '../pages/designer/AssignedProjectsPage';
+import { AssignedOrdersPage } from '../pages/designer/AssignedOrdersPage';
 import { DesignerChatPage } from '../pages/designer/DesignerChatPage';
 import { DesignerNotificationsPage } from '../pages/designer/NotificationsPage';
 
@@ -62,7 +62,7 @@ export function AppRouter() {
               {/* Super Admin */}
               <Route element={<RoleRoute allowedRoles={['super-admin']} />}>
                 <Route path="/dashboard/super-admin" element={<SuperAdminDashboard />} />
-                <Route path="/dashboard/super-admin/projects" element={<ProjectsPage />} />
+                <Route path="/dashboard/super-admin/orders" element={<OrdersPage />} />
                 <Route path="/dashboard/super-admin/chats" element={<ChatsPage />} />
                 <Route path="/dashboard/super-admin/users" element={<UsersPage />} />
                 <Route path="/dashboard/super-admin/dynamic-fields" element={<DynamicFieldsPage />} />
@@ -73,7 +73,7 @@ export function AppRouter() {
               {/* Admin */}
               <Route element={<RoleRoute allowedRoles={['admin']} />}>
                 <Route path="/dashboard/admin" element={<AdminDashboard />} />
-                <Route path="/dashboard/admin/projects" element={<ProjectsPage />} />
+                <Route path="/dashboard/admin/orders" element={<OrdersPage />} />
                 <Route path="/dashboard/admin/customers" element={<CustomersPage />} />
                 <Route path="/dashboard/admin/designers" element={<DesignersPage />} />
                 <Route path="/dashboard/admin/chats" element={<ChatsPage />} />
@@ -91,7 +91,7 @@ export function AppRouter() {
               {/* Designer */}
               <Route element={<RoleRoute allowedRoles={['designer']} />}>
                 <Route path="/dashboard/designer" element={<DesignerDashboard />} />
-                <Route path="/dashboard/designer/assigned-projects" element={<AssignedProjectsPage />} />
+                <Route path="/dashboard/designer/assigned-orders" element={<AssignedOrdersPage />} />
                 <Route path="/dashboard/designer/chat" element={<DesignerChatPage />} />
                 <Route path="/dashboard/designer/notifications" element={<DesignerNotificationsPage />} />
               </Route>

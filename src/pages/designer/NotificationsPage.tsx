@@ -11,7 +11,7 @@ export function DesignerNotificationsPage() {
 
   return (
     <PageContainer>
-      <PageTitle title="Notifications" subtitle="Stay updated on your project assignments." className="mb-8" />
+      <PageTitle title="Notifications" subtitle="Stay updated on your order assignments." className="mb-8" />
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <span className="text-sm text-slate-500">{myNotifications.filter((n) => !n.read).length} unread</span>
@@ -33,8 +33,8 @@ export function DesignerNotificationsPage() {
                   markNotificationRead(n.id);
                   if (n.type === 'chat' && n.threadId) {
                     navigate(`/dashboard/designer/chat`);
-                  } else if (n.type === 'project' && n.projectId) {
-                    navigate(`/dashboard/designer/assigned-projects?id=${n.projectId}`);
+                  } else if (n.type === 'order' && n.orderId) {
+                    navigate(`/dashboard/designer/assigned-orders?id=${n.orderId}`);
                   }
                 }}
                 className={`flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-colors cursor-pointer ${n.read ? 'opacity-60' : ''}`}

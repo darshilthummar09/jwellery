@@ -14,8 +14,9 @@ import {
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { useChatNotification } from '../../context/ChatNotificationContext';
-import type { OrderAttachment, OrderDetails, Project } from '../../context/ChatNotificationContext';
+import type { OrderAttachment, OrderDetails, Order } from '../../context/ChatNotificationContext';
 import { useAuth } from '../../hooks/useAuth';
+import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
 import {
   Dialog,
   DialogContent,
@@ -129,20 +130,20 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
-function ProductCard({ project }: { project: Project }) {
-  const emoji = CATEGORY_EMOJIS[project.category] || '👑';
+function ProductCard({ order }: { order: Order }) {
+  const emoji = CATEGORY_EMOJIS[order.category] || '👑';
 
   return (
-    <div id={`project-card-${project.id}`} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all overflow-hidden flex flex-col">
+    <div id={`order-card-${order.id}`} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all overflow-hidden flex flex-col">
       {/* Cover */}
       <div className="h-40 bg-gradient-to-br from-slate-50 to-emerald-50/50 flex items-center justify-center text-6xl select-none overflow-hidden relative">
-        {project.image ? (
-          <img src={project.image} alt={project.name} className="w-full h-full object-cover" />
+        {order.image ? (
+          <img src={order.image} alt={order.name} className="w-full h-full object-cover" />
         ) : (
           emoji
         )}
         {/* Completed ribbon */}
-        {project.status === 'Completed' && (
+        {order.status === 'Completed' && (
           <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
             <CheckCircle size={10} /> Completed
           </div>
@@ -152,72 +153,72 @@ function ProductCard({ project }: { project: Project }) {
       {/* Body */}
       <div className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between mb-2 gap-2">
-          <h3 className="font-semibold text-slate-800 leading-tight text-sm">{project.name}</h3>
-          <StatusBadge status={project.status} />
+          <h3 className="font-semibold text-slate-800 leading-tight text-sm">{order.name}</h3>
+          <StatusBadge status={order.status} />
         </div>
 
         <p className="text-xs text-slate-400 mb-3">
-          {project.category}
-          {project.metal ? ` · ${project.metal}` : ''}
-          {project.karat ? ` (${project.karat})` : ''}
+          {order.category}
+          {order.metal ? ` · ${order.metal}` : ''}
+          {order.karat ? ` (${order.karat})` : ''}
         </p>
 
         {/* Technical specs */}
-        {(project.size || project.weight || project.created) && (
+        {(order.size || order.weight || order.created) && (
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 mb-3 text-slate-600">
-            {project.size && (
+            {order.size && (
               <div>
-                <span className="font-semibold text-slate-500">Size: </span>No. {project.size}
+                <span className="font-semibold text-slate-500">Size: </span>No. {order.size}
               </div>
             )}
-            {project.weight && (
+            {order.weight && (
               <div>
                 <span className="font-semibold text-slate-500">Weight: </span>
-                {project.weight}
+                {order.weight}
               </div>
             )}
-            {project.created && (
+            {order.created && (
               <div className="col-span-2">
                 <span className="font-semibold text-slate-500">Placed On: </span>
-                {project.created}
+                {order.created}
               </div>
             )}
           </div>
         )}
 
         {/* Notes */}
-        {project.notes && (
+        {order.notes && (
           <p className="text-xs text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-3 line-clamp-2">
-            {project.notes}
+            {order.notes}
           </p>
         )}
 
         {/* Rejection reason */}
-        {project.status === 'Rejected' && project.rejectionReason && (
+        {order.status === 'Rejected' && order.rejectionReason && (
           <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2 mb-3">
             <p className="text-[11px] font-semibold text-red-500 mb-0.5">Rejection Reason</p>
-            <p className="text-xs text-red-700">{project.rejectionReason}</p>
+            <p className="text-xs text-red-700">{order.rejectionReason}</p>
           </div>
         )}
 
         {/* Progress bar */}
-        {project.progress && project.progress !== '0%' && (
+        {order.progress && order.progress !== '0%' && (
           <div className="mt-auto pt-2">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Progress</span>
-              <span className="text-[10px] font-bold text-emerald-600">{project.progress}</span>
+              <span className="text-[10px] font-bold text-emerald-600">{order.progress}</span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5">
               <div
                 className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
-                style={{ width: project.progress }}
+                style={{ width: order.progress }}
               />
             </div>
           </div>
         )}
 
         {/* Budget */}
-        <p className="font-bold text-emerald-600 text-base mt-3">{project.budget}</p>
+        <p className="font-bold text-emerald-600 text-base mt-3">{order.budget}</p>
       </div>
     </div>
   );
@@ -228,26 +229,26 @@ function ProductCard({ project }: { project: Project }) {
 export function MyProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const { createThreadForOrder, projects } = useChatNotification();
+  const { createThreadForOrder, orders } = useChatNotification();
 
-  // Derive customer's orders DIRECTLY from the shared projects context — never
+  // Derive customer's orders DIRECTLY from the shared orders context — never
   // use a separate localStorage list, so status updates from the admin always
   // show here immediately and completed orders never disappear.
   const customerId = user?.id ?? user?.email ?? 'customer';
   const customerName = user?.name ?? 'Customer';
 
-  const myProjects = projects.filter(
-    (p) =>
-      p.customerId === customerId ||
-      p.customerName.toLowerCase() === customerName.toLowerCase()
+  const myOrders = orders.filter(
+    (o) =>
+      o.customerId === customerId ||
+      o.customerName.toLowerCase() === customerName.toLowerCase()
   );
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Rings');
-  const [metal, setMetal] = useState('Gold');
-  const [karat, setKarat] = useState('18k');
+  const [metal, setMetal] = useState<string>(METAL_OPTIONS[0]);
+  const [karat, setKarat] = useState<string>(KARAT_OPTIONS[2]);
   const [size, setSize] = useState('');
   const [weight, setWeight] = useState('');
   const [budget, setBudget] = useState('');
@@ -267,12 +268,12 @@ export function MyProductsPage() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Scroll and highlight project from query param ?id=...
+  // Scroll and highlight order from query param ?id=...
   useEffect(() => {
     const id = searchParams.get('id');
     if (id) {
       const timer = setTimeout(() => {
-        const element = document.getElementById(`project-card-${id}`);
+        const element = document.getElementById(`order-card-${id}`);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           element.classList.add('ring-2', 'ring-emerald-500', 'scale-[1.01]');
@@ -336,8 +337,8 @@ export function MyProductsPage() {
   const resetForm = () => {
     setName('');
     setCategory('Rings');
-    setMetal('Gold');
-    setKarat('18k');
+    setMetal(METAL_OPTIONS[0]);
+    setKarat(KARAT_OPTIONS[2]);
     setSize('');
     setWeight('');
     setBudget('');
@@ -379,8 +380,8 @@ export function MyProductsPage() {
       attachments,
     };
 
-    // This adds the project to the shared context (Firebase-synced) and creates
-    // the chat thread. The product will immediately appear in myProjects above.
+    // This adds the order to the shared context (Firebase-synced) and creates
+    // the chat thread. The product will immediately appear in myOrders above.
     createThreadForOrder(customerId, customerName, orderDetails);
 
     resetForm();
@@ -393,7 +394,7 @@ export function MyProductsPage() {
     <PageContainer>
       <PageTitle
         title="My Products"
-        subtitle={`${myProjects.length} order${myProjects.length !== 1 ? 's' : ''} · status updates in real time`}
+        subtitle={`${myOrders.length} order${myOrders.length !== 1 ? 's' : ''} · status updates in real time`}
         className="mb-8"
         action={
           <button
@@ -407,7 +408,7 @@ export function MyProductsPage() {
       />
 
       {/* ── Empty state ── */}
-      {myProjects.length === 0 ? (
+      {myOrders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
             <Sparkles size={28} className="text-emerald-500" />
@@ -429,7 +430,7 @@ export function MyProductsPage() {
           <div className="flex flex-wrap gap-3 mb-6">
             {(['Pending Approval', 'Approved', 'In Progress', 'Review', 'Completed', 'Rejected'] as const).map(
               (s) => {
-                const count = myProjects.filter((p) => p.status === s).length;
+                const count = myOrders.filter((o) => o.status === s).length;
                 if (!count) return null;
                 const cfg = STATUS_CONFIG[s];
                 return (
@@ -448,8 +449,8 @@ export function MyProductsPage() {
 
           {/* ── Product grid ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {myProjects.map((project) => (
-              <ProductCard key={project.id} project={project} />
+            {myOrders.map((order) => (
+              <ProductCard key={order.id} order={order} />
             ))}
           </div>
         </>
@@ -494,7 +495,7 @@ export function MyProductsPage() {
             </div>
 
             {/* Category / Metal / Karat */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 {
                   id: 'order-category', label: 'Category', value: category,
@@ -504,12 +505,12 @@ export function MyProductsPage() {
                 {
                   id: 'order-metal', label: 'Metal', value: metal,
                   onChange: setMetal,
-                  options: ['Gold', 'Rose Gold', 'White Gold', 'Platinum', 'Silver'],
+                  options: METAL_OPTIONS as unknown as string[],
                 },
                 {
                   id: 'order-karat', label: 'Karat', value: karat,
                   onChange: setKarat,
-                  options: ['14k', '18k', '22k', '24k'],
+                  options: KARAT_OPTIONS as unknown as string[],
                 },
               ].map(({ id, label, value, onChange, options }) => (
                 <div key={id}>

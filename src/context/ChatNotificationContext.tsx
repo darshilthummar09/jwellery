@@ -50,8 +50,8 @@ export interface AppNotification {
   body: string;
   time: string;
   read: boolean;
-  type?: 'order' | 'chat' | 'project';
-  projectId?: string;
+  type?: 'order' | 'chat';
+  orderId?: string;
   threadId?: string;
 }
 
@@ -81,15 +81,15 @@ export interface OrderDetails {
   images?: UploadedOrderImage[];
 }
 
-export type ProjectStatus = 'Pending Approval' | 'Approved' | 'Rejected' | 'In Progress' | 'Review' | 'Completed';
+export type OrderStatus = 'Pending Approval' | 'Approved' | 'Rejected' | 'In Progress' | 'Review' | 'Completed';
 
-export interface Project {
+export interface Order {
   id: string;
   name: string;
   customerId: string;
   customerName: string;
   designerName: string;
-  status: ProjectStatus;
+  status: OrderStatus;
   due: string;
   budget: string;
   priority: 'High' | 'Medium' | 'Low';
@@ -108,7 +108,7 @@ export interface Project {
 
 interface ChatNotificationContextValue {
   threads: ChatThread[];
-  projects: Project[];
+  orders: Order[];
   notifications: AppNotification[];
   sendCustomerMessage: (customerId: string, customerName: string, text: string, optionalThreadId?: string) => void;
   sendDesignerMessage: (threadId: string, designerName: string, text: string) => void;
@@ -116,12 +116,12 @@ interface ChatNotificationContextValue {
   markThreadRead: (threadId: string, as: 'admin' | 'customer' | 'designer') => void;
   getThreadByCustomer: (customerId: string) => ChatThread | undefined;
   getDesignerThread: (designerName: string) => ChatThread | undefined;
-  ensureDesignerThread: (designerName: string, projectName?: string) => string;
+  ensureDesignerThread: (designerName: string, orderName?: string) => string;
   createThreadForOrder: (customerId: string, customerName: string, order: OrderDetails) => void;
-  upsertProject: (project: Project) => void;
-  approveProject: (projectId: string) => void;
-  rejectProject: (projectId: string, reason?: string) => void;
-  deleteProject: (projectId: string) => void;
+  upsertOrder: (order: Order) => void;
+  approveOrder: (orderId: string) => void;
+  rejectOrder: (orderId: string, reason?: string) => void;
+  deleteOrder: (orderId: string) => void;
   addNotification: (n: Omit<AppNotification, 'id'>) => void;
   markAllNotificationsRead: (role: 'customer' | 'admin' | 'designer') => void;
   markNotificationRead: (id: number) => void;
@@ -137,7 +137,7 @@ const CHAT_CHANNEL_NAME = 'dream-jewels-live-chat';
 // ─── Seed data ────────────────────────────────────────────────────────────────
 
 const INITIAL_THREADS: ChatThread[] = [];
-const INITIAL_PROJECTS: Project[] = [];
+const INITIAL_ORDERS: Order[] = [];
 const DEFAULT_DESIGNER_NAME = 'Riya Sharma';
 
 const createDesignerThreadId = (designerName: string) =>
@@ -149,28 +149,30 @@ const formatLastMessage = (text: string, attachments?: ChatAttachment[]) => {
   return attachments.length === 1 ? `Sent ${attachments[0].name}` : `Sent ${attachments.length} files`;
 };
 
-function loadStoredChatState() {
+interface StoredChatState {
+  threads?: ChatThread[];
+  orders?: Order[];
+  /** @deprecated legacy key from before the Project → Order rename */
+  projects?: Order[];
+  notifications?: AppNotification[];
+  notifCounter?: number;
+}
+
+/** Reads the orders array from a stored state blob, falling back to the pre-rename `projects` key. */
+function readOrders(state: StoredChatState): Order[] {
+  return state.orders ?? state.projects ?? INITIAL_ORDERS;
+}
+
+function loadStoredChatState(): StoredChatState | null {
   if (typeof window === 'undefined') return null;
 
   try {
     const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as {
-      threads?: ChatThread[];
-      projects?: Project[];
-      notifications?: AppNotification[];
-      notifCounter?: number;
-    };
+    return JSON.parse(raw) as StoredChatState;
   } catch {
     return null;
   }
-}
-
-interface StoredChatState {
-  threads?: ChatThread[];
-  projects?: Project[];
-  notifications?: AppNotification[];
-  notifCounter?: number;
 }
 
 function parseStoredChatState(raw: string | null): StoredChatState | null {
@@ -201,14 +203,14 @@ function removeDeletedSeedData(state: StoredChatState | null): StoredChatState |
 export function ChatNotificationProvider({ children }: { children: React.ReactNode }) {
   const storedState = removeDeletedSeedData(loadStoredChatState());
   const [threads, setThreads] = useState<ChatThread[]>(storedState?.threads ?? INITIAL_THREADS);
-  const [projects, setProjects] = useState<Project[]>(storedState?.projects ?? INITIAL_PROJECTS);
+  const [orders, setOrders] = useState<Order[]>(storedState ? readOrders(storedState) : INITIAL_ORDERS);
   const [notifications, setNotifications] = useState<AppNotification[]>(storedState?.notifications ?? INITIAL_NOTIFICATIONS);
   const [notifCounter, setNotifCounter] = useState(storedState?.notifCounter ?? 9000);
   const [remoteReady, setRemoteReady] = useState(!isFirebaseConfigured);
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const lastSerializedStateRef = useRef('');
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const initialStateRef = useRef({ threads, projects, notifications, notifCounter });
+  const initialStateRef = useRef({ threads, orders, notifications, notifCounter });
 
   const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
     const items = Array.isArray(n) ? n : [n];
@@ -256,7 +258,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     if (!sanitized) return;
 
     setThreads(sanitized.threads ?? INITIAL_THREADS);
-    setProjects(sanitized.projects ?? INITIAL_PROJECTS);
+    setOrders(readOrders(sanitized));
     setNotifications(sanitized.notifications ?? INITIAL_NOTIFICATIONS);
     setNotifCounter(sanitized.notifCounter ?? 9000);
   }, []);
@@ -270,7 +272,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     lastSerializedStateRef.current = serialized;
     setThreads(sanitized.threads ?? INITIAL_THREADS);
-    setProjects(sanitized.projects ?? INITIAL_PROJECTS);
+    setOrders(readOrders(sanitized));
     setNotifications(sanitized.notifications ?? INITIAL_NOTIFICATIONS);
     setNotifCounter(sanitized.notifCounter ?? 9000);
   }, []);
@@ -299,7 +301,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     if (firebaseDatabase) {
       const chatStateRef = ref(firebaseDatabase, 'chatState');
-      
+
       // If Firebase takes more than 2.5 seconds to reply, fallback to local storage
       fallbackTimer = setTimeout(() => {
         console.warn('Firebase RTDB connection timeout. Falling back to local storage.');
@@ -340,7 +342,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   }, [applyChatState, applyStoredState]);
 
   useEffect(() => {
-    const serialized = JSON.stringify({ threads, projects, notifications, notifCounter });
+    const serialized = JSON.stringify({ threads, orders, notifications, notifCounter });
     if (serialized === lastSerializedStateRef.current) return;
 
     // Always update local storage and notify other tabs immediately
@@ -364,36 +366,36 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         console.error('Failed to save state to Firebase:', e);
       }
     }
-  }, [threads, projects, notifications, notifCounter, remoteReady]);
+  }, [threads, orders, notifications, notifCounter, remoteReady]);
 
-  const buildProjectDetailsText = (project: Project) => {
+  const buildOrderDetailsText = (order: Order) => {
     const lines = [
-      `Project: ${project.name}`,
-      `Customer: ${project.customerName}`,
-      `Category: ${project.category}`,
-      `Metal: ${project.metal} (${project.karat})`,
-      `Budget: ${project.budget}`,
-      `Due: ${project.due}`,
-      `Priority: ${project.priority}`,
-      `Project ID: ${project.id}`,
+      `Order: ${order.name}`,
+      `Customer: ${order.customerName}`,
+      `Category: ${order.category}`,
+      `Metal: ${order.metal} (${order.karat})`,
+      `Budget: ${order.budget}`,
+      `Due: ${order.due}`,
+      `Priority: ${order.priority}`,
+      `Order ID: ${order.id}`,
     ];
 
-    if (project.size) lines.push(`Size: No. ${project.size}`);
-    if (project.weight) lines.push(`Weight: ${project.weight}`);
-    if (project.notes) lines.push(`Notes: ${project.notes}`);
-    if (project.image) lines.push('Sample image/sketch attached in the customer order.');
+    if (order.size) lines.push(`Size: No. ${order.size}`);
+    if (order.weight) lines.push(`Weight: ${order.weight}`);
+    if (order.notes) lines.push(`Notes: ${order.notes}`);
+    if (order.image) lines.push('Sample image/sketch attached in the customer order.');
 
     return lines.join('\n');
   };
 
-  const ensureDesignerThread = useCallback((designerName: string, projectName?: string) => {
+  const ensureDesignerThread = useCallback((designerName: string, orderName?: string) => {
     const threadId = createDesignerThreadId(designerName);
 
     setThreads((prev) => {
       if (prev.some((t) => t.id === threadId)) return prev;
 
-      const introText = projectName
-        ? `Project discussion started for ${projectName}.`
+      const introText = orderName
+        ? `Order discussion started for ${orderName}.`
         : 'Designer conversation started.';
 
       const newThread: ChatThread = {
@@ -426,7 +428,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const createThreadForOrder = useCallback(
     (customerId: string, customerName: string, order: OrderDetails) => {
       const orderName = order.name;
-      const projectId = `PRJ-${Date.now()}`;
+      const orderId = `ORD-${Date.now()}`;
 
       // Message 1: Greeting visible to the customer
       const greetMsg: ChatMessage = {
@@ -521,8 +523,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         return [newThread, ...prev];
       });
 
-      const newProject: Project = {
-        id: projectId,
+      const newOrder: Order = {
+        id: orderId,
         name: order.name,
         customerId,
         customerName,
@@ -549,7 +551,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         progress: '0%',
       };
 
-      setProjects((prev) => [newProject, ...prev.filter((project) => project.id !== projectId)]);
+      setOrders((prev) => [newOrder, ...prev.filter((order) => order.id !== orderId)]);
 
       addNotification([
         {
@@ -559,7 +561,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           time: 'Just now',
           read: false,
           type: 'order',
-          projectId: projectId,
+          orderId: orderId,
         },
         {
           role: 'customer',
@@ -575,81 +577,81 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     [addNotification]
   );
 
-  const upsertProject = useCallback((project: Project) => {
-    const existing = projects.find((item) => item.id === project.id);
+  const upsertOrder = useCallback((order: Order) => {
+    const existing = orders.find((item) => item.id === order.id);
 
-    setProjects((current) => {
-      const exists = current.some((item) => item.id === project.id);
+    setOrders((current) => {
+      const exists = current.some((item) => item.id === order.id);
       return exists
-        ? current.map((item) => (item.id === project.id ? project : item))
-        : [project, ...current];
+        ? current.map((item) => (item.id === order.id ? order : item))
+        : [order, ...current];
     });
 
     if (existing) {
-      const statusChanged = existing.status !== project.status;
-      const progressChanged = existing.progress !== project.progress;
+      const statusChanged = existing.status !== order.status;
+      const progressChanged = existing.progress !== order.progress;
 
       if (statusChanged || progressChanged) {
-        const statusText = statusChanged ? `status to ${project.status}` : '';
-        const progressText = progressChanged ? `progress to ${project.progress}` : '';
+        const statusText = statusChanged ? `status to ${order.status}` : '';
+        const progressText = progressChanged ? `progress to ${order.progress}` : '';
         const andText = statusChanged && progressChanged ? ' and ' : '';
         const changeDesc = `${statusText}${andText}${progressText}`;
 
         addNotification([
           {
             role: 'customer',
-            title: `Project Update: ${project.name}`,
-            body: `Your project has been updated: ${changeDesc}.`,
+            title: `Order Update: ${order.name}`,
+            body: `Your order has been updated: ${changeDesc}.`,
             time: 'Just now',
             read: false,
-            type: 'project',
-            projectId: project.id,
+            type: 'order',
+            orderId: order.id,
           },
           {
             role: 'admin',
-            title: `Project Update: ${project.name}`,
-            body: `Designer ${project.designerName} updated ${changeDesc}.`,
+            title: `Order Update: ${order.name}`,
+            body: `Designer ${order.designerName} updated ${changeDesc}.`,
             time: 'Just now',
             read: false,
-            type: 'project',
-            projectId: project.id,
+            type: 'order',
+            orderId: order.id,
           }
         ]);
       }
     }
-  }, [projects, addNotification]);
+  }, [orders, addNotification]);
 
-  const approveProject = useCallback((projectId: string) => {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) return;
+  const approveOrder = useCallback((orderId: string) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
 
-    const approvedProject: Project = {
-      ...project,
+    const approvedOrder: Order = {
+      ...order,
       status: 'Approved',
-      progress: project.progress === '0%' ? '10%' : project.progress,
+      progress: order.progress === '0%' ? '10%' : order.progress,
     };
 
-    setProjects((current) =>
-      current.map((item) => (item.id === projectId ? approvedProject : item))
+    setOrders((current) =>
+      current.map((item) => (item.id === orderId ? approvedOrder : item))
     );
 
-    const designerThreadId = createDesignerThreadId(approvedProject.designerName);
+    const designerThreadId = createDesignerThreadId(approvedOrder.designerName);
 
     // Extract and format customer images into chat attachments
     const attachments: ChatAttachment[] = [];
-    if (approvedProject.image) {
+    if (approvedOrder.image) {
       attachments.push({
         id: Date.now() + 999,
-        name: `${approvedProject.name}_design.png`,
+        name: `${approvedOrder.name}_design.png`,
         size: 450000,
         type: 'image/png',
-        url: approvedProject.image,
+        url: approvedOrder.image,
         kind: 'image',
       });
     }
-    if (approvedProject.images && approvedProject.images.length > 0) {
-      approvedProject.images.forEach((img, idx) => {
-        if (img.url !== approvedProject.image) {
+    if (approvedOrder.images && approvedOrder.images.length > 0) {
+      approvedOrder.images.forEach((img, idx) => {
+        if (img.url !== approvedOrder.image) {
           attachments.push({
             id: Date.now() + idx,
             name: img.name || `attachment_${idx}.png`,
@@ -662,7 +664,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       });
     }
 
-    const detailText = `Approved project assigned:\n${buildProjectDetailsText(approvedProject)}`;
+    const detailText = `Approved order assigned:\n${buildOrderDetailsText(approvedOrder)}`;
     const msg: ChatMessage = {
       id: Date.now(),
       from: 'admin',
@@ -681,7 +683,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
                   ...thread,
                   messages: [...thread.messages, msg],
                   customerUnread: thread.customerUnread + 1,
-                  lastMessage: `Assigned: ${approvedProject.name}`,
+                  lastMessage: `Assigned: ${approvedOrder.name}`,
                   lastTime: 'Just now',
                 }
               : thread
@@ -689,13 +691,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         : [
             {
               id: designerThreadId,
-              customerName: approvedProject.designerName,
+              customerName: approvedOrder.designerName,
               customerId: designerThreadId,
               participantRole: 'designer',
               messages: [msg],
               unread: 0,
               customerUnread: 1,
-              lastMessage: `Assigned: ${approvedProject.name}`,
+              lastMessage: `Assigned: ${approvedOrder.name}`,
               lastTime: 'Just now',
             },
             ...prev,
@@ -705,55 +707,55 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     addNotification([
       {
         role: 'customer',
-        title: `Project approved: ${approvedProject.name}`,
+        title: `Order approved: ${approvedOrder.name}`,
         body: 'Your custom order has been approved and moved into design.',
         time: 'Just now',
         read: false,
-        type: 'project',
-        projectId: approvedProject.id,
+        type: 'order',
+        orderId: approvedOrder.id,
       },
       {
         role: 'designer',
-        title: `New project assigned: ${approvedProject.name}`,
-        body: `${approvedProject.customerName}'s full project details are ready for design.`,
+        title: `New order assigned: ${approvedOrder.name}`,
+        body: `${approvedOrder.customerName}'s full order details are ready for design.`,
         time: 'Just now',
         read: false,
-        type: 'project',
-        projectId: approvedProject.id,
+        type: 'order',
+        orderId: approvedOrder.id,
       }
     ]);
-  }, [projects, addNotification]);
+  }, [orders, addNotification]);
 
-  const deleteProject = useCallback((projectId: string) => {
-    setProjects((current) => current.filter((item) => item.id !== projectId));
+  const deleteOrder = useCallback((orderId: string) => {
+    setOrders((current) => current.filter((item) => item.id !== orderId));
   }, []);
 
-  const rejectProject = useCallback((projectId: string, reason?: string) => {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) return;
+  const rejectOrder = useCallback((orderId: string, reason?: string) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
 
-    const rejectedProject: Project = {
-      ...project,
+    const rejectedOrder: Order = {
+      ...order,
       status: 'Rejected',
       rejectionReason: reason?.trim() || undefined,
     };
 
-    setProjects((current) =>
-      current.map((item) => (item.id === projectId ? rejectedProject : item))
+    setOrders((current) =>
+      current.map((item) => (item.id === orderId ? rejectedOrder : item))
     );
 
     addNotification({
       role: 'customer',
-      title: `Project rejected: ${rejectedProject.name}`,
-      body: rejectedProject.rejectionReason
-        ? `Reason: ${rejectedProject.rejectionReason}`
+      title: `Order rejected: ${rejectedOrder.name}`,
+      body: rejectedOrder.rejectionReason
+        ? `Reason: ${rejectedOrder.rejectionReason}`
         : 'Your custom order could not be approved at this time.',
       time: 'Just now',
       read: false,
-      type: 'project',
-      projectId: rejectedProject.id,
+      type: 'order',
+      orderId: rejectedOrder.id,
     });
-  }, [projects, addNotification]);
+  }, [orders, addNotification]);
 
   const sendCustomerMessage = useCallback(
     (customerId: string, customerName: string, text: string, optionalThreadId?: string) => {
@@ -950,7 +952,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     <ChatNotificationContext.Provider
       value={{
         threads,
-        projects,
+        orders,
         notifications,
         sendCustomerMessage,
         sendDesignerMessage,
@@ -960,10 +962,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         getDesignerThread,
         ensureDesignerThread,
         createThreadForOrder,
-        upsertProject,
-        approveProject,
-        rejectProject,
-        deleteProject,
+        upsertOrder,
+        approveOrder,
+        rejectOrder,
+        deleteOrder,
         addNotification,
         markAllNotificationsRead,
         markNotificationRead,

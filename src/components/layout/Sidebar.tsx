@@ -88,7 +88,7 @@ function SidebarContent({
 }) {
   const { user, logout } = useAuth();
   const { role } = useRole();
-  const { getChatUnreadCount, projects } = useChatNotification();
+  const { getChatUnreadCount, orders } = useChatNotification();
   const navigate = useNavigate();
   const navItems = role ? ROLE_NAV_MAP[role] : [];
   const chatUnreadCount = role ? getChatUnreadCount(role === 'super-admin' ? 'admin' : role) : 0;
@@ -140,8 +140,8 @@ function SidebarContent({
           let badgeCount = 0;
           if (item.path.includes('/chat') || item.path.includes('/chats')) {
             badgeCount = chatUnreadCount;
-          } else if (item.path.includes('/projects') && (role === 'admin' || role === 'super-admin')) {
-            badgeCount = projects.filter((p) => p.status === 'Pending Approval').length;
+          } else if (item.path.includes('/orders') && (role === 'admin' || role === 'super-admin')) {
+            badgeCount = orders.filter((o) => o.status === 'Pending Approval').length;
           }
 
           return (

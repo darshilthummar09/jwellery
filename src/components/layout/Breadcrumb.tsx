@@ -12,14 +12,14 @@ const SEGMENT_LABELS: Record<string, string> = {
   'dynamic-fields': 'Dynamic Fields',
   categories: 'Categories',
   settings: 'Settings',
-  projects: 'Projects',
+  orders: 'Orders',
   customers: 'Customers',
   designers: 'Designers',
   chats: 'Chats',
   'my-products': 'My Products',
   chat: 'General Chat',
   notifications: 'Notifications',
-  'assigned-projects': 'Assigned Projects',
+  'assigned-orders': 'Assigned Orders',
 };
 
 function toLabel(segment: string): string {
@@ -50,16 +50,16 @@ export function Breadcrumb() {
           const isLast = i === segments.length - 1;
 
           return (
-            <li key={path} className="flex items-center gap-1">
+            <li key={path} className={`items-center gap-1 min-w-0 ${isLast ? 'flex' : 'hidden sm:flex'}`}>
               <ChevronRight size={13} className="text-slate-300 flex-shrink-0" />
               {isLast ? (
-                <span className="text-sm font-semibold text-slate-800 px-1">
+                <span className="text-sm font-semibold text-slate-800 px-1 truncate">
                   {toLabel(seg)}
                 </span>
               ) : (
                 <Link
                   to={path}
-                  className="text-sm text-slate-500 hover:text-slate-700 px-1 py-0.5 rounded hover:bg-slate-100 transition-colors"
+                  className="text-sm text-slate-500 hover:text-slate-700 px-1 py-0.5 rounded hover:bg-slate-100 transition-colors whitespace-nowrap"
                 >
                   {toLabel(seg)}
                 </Link>

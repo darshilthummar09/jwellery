@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useRole } from '../../hooks/useRole';
-import { 
-  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Settings,
-  Home, FolderKanban, MessageSquare, Users, Palette,
-  Sparkles, Package, Shield
+import {
+  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Search
 } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
 import { RoleBadge } from '../common/Badge';
 import { Modal } from '../common/Modal';
+import { Breadcrumb } from './Breadcrumb';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 
 
@@ -68,7 +67,7 @@ function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-11 w-80 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 z-20 overflow-hidden">
+          <div className="absolute right-0 top-11 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 z-20 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
               <span className="font-semibold text-slate-800 text-sm">
                 Notifications
@@ -118,17 +117,13 @@ function NotificationBell() {
                         } else if (role === 'designer') {
                           navigate(`/dashboard/designer/chat`);
                         }
-                      } else if (n.type === 'order' && n.projectId) {
+                      } else if (n.type === 'order' && n.orderId) {
                         if (role === 'admin') {
-                          navigate(`/dashboard/admin/projects?id=${n.projectId}`);
-                        }
-                      } else if (n.type === 'project' && n.projectId) {
-                        if (role === 'admin') {
-                          navigate(`/dashboard/admin/projects?id=${n.projectId}`);
+                          navigate(`/dashboard/admin/orders?id=${n.orderId}`);
                         } else if (role === 'customer') {
-                          navigate(`/dashboard/customer/my-products?id=${n.projectId}`);
+                          navigate(`/dashboard/customer/my-products?id=${n.orderId}`);
                         } else if (role === 'designer') {
-                          navigate(`/dashboard/designer/assigned-projects?id=${n.projectId}`);
+                          navigate(`/dashboard/designer/assigned-orders?id=${n.orderId}`);
                         }
                       }
                     }}
@@ -211,28 +206,20 @@ function UserDropdown() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 z-20 overflow-hidden">
+        <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] max-w-56 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 z-20 overflow-hidden">
           {/* User info header */}
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
             <div className="text-sm font-semibold text-slate-800">{user?.name}</div>
             <div className="text-xs text-slate-400 mt-0.5">{user?.email}</div>
           </div>
 
-          {/* Menu items */}
           <div className="py-1.5">
-            <button 
+            <button
               onClick={() => { setProfileModalOpen(true); setOpen(false); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <UserIcon size={15} className="text-slate-400" />
               My Profile
-            </button>
-            <button 
-              onClick={() => { setPreferencesModalOpen(true); setOpen(false); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <Settings size={15} className="text-slate-400" />
-              Preferences
             </button>
           </div>
 
@@ -279,31 +266,7 @@ function UserDropdown() {
         </Modal>
       )}
 
-      {/* Preferences Modal */}
-      {preferencesModalOpen && (
-        <Modal title="Preferences" onClose={() => setPreferencesModalOpen(false)}>
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <label className="flex items-center justify-between text-sm font-medium text-slate-700 cursor-pointer">
-                <span>Email Notifications</span>
-                <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" />
-              </label>
-              <label className="flex items-center justify-between text-sm font-medium text-slate-700 cursor-pointer">
-                <span>In-App Notifications</span>
-                <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" />
-              </label>
-              <label className="flex items-center justify-between text-sm font-medium text-slate-700 cursor-pointer">
-                <span>Dark Mode</span>
-                <input type="checkbox" className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" />
-              </label>
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <button onClick={() => setPreferencesModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Cancel</button>
-              <button onClick={() => setPreferencesModalOpen(false)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">Save Preferences</button>
-            </div>
-          </div>
-        </Modal>
-      )}
+
     </div>
   );
 }
@@ -322,7 +285,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       </button>
 
       {/* Breadcrumb */}
-      <div className="flex-1 min-w-0 hidden sm:block">
+      <div className="flex-1 min-w-0">
         <Breadcrumb />
       </div>
 

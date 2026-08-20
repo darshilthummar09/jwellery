@@ -60,8 +60,8 @@ export function CustomerNotificationsPage() {
     markNotificationRead(n.id);
     if (n.type === 'chat' && n.threadId) {
       navigate(`/dashboard/customer/chat`);
-    } else if (n.type === 'project' && n.projectId) {
-      navigate(`/dashboard/customer/my-products?id=${n.projectId}`);
+    } else if (n.type === 'order' && n.orderId) {
+      navigate(`/dashboard/customer/my-products?id=${n.orderId}`);
     }
   };
 

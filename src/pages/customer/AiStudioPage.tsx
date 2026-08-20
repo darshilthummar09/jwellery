@@ -7,6 +7,9 @@ import { useAuth } from '../../hooks/useAuth';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 import { Avatar } from '../../components/common/Avatar';
 import type { OrderDetails } from '../../context/ChatNotificationContext';
+import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
+
+const METAL_SETTING_OPTIONS = KARAT_OPTIONS.flatMap((karat) => METAL_OPTIONS.map((metal) => `${karat} ${metal}`));
 
 interface ChatMessage {
   id: number;
@@ -17,8 +20,8 @@ interface ChatMessage {
 
 const DEFAULT_SPECS = {
   category: 'Ring',
-  metal: '18K White Gold',
-  karat: '18K',
+  metal: '18 KT White Gold',
+  karat: '18 KT',
   gems: 'Diamond (Solitaire)',
   size: '6.5',
   weight: '3.2g',
@@ -109,37 +112,35 @@ export function AiStudioPage() {
 
     if (lower.includes('ring') || lower.includes('solitaire')) {
       updatedSpecs.category = 'Ring';
-      updatedSpecs.metal = '18K White Gold';
+      updatedSpecs.metal = '18 KT White Gold';
       updatedSpecs.gems = 'Diamond (Solitaire)';
       updatedSpecs.notes = 'Elegant ring with solitaire central gem.';
-      reply = "A custom ring is a beautiful choice! I have adjusted the category to 'Ring'. Would you prefer White Gold, Yellow Gold, or Platinum for the metal setting?";
+      reply = "A custom ring is a beautiful choice! I have adjusted the category to 'Ring'. Would you prefer White Gold, Yellow Gold, or Rose Gold for the metal setting?";
     } else if (lower.includes('pendant') || lower.includes('emerald')) {
       updatedSpecs.category = 'Pendant';
-      updatedSpecs.metal = '18K Yellow Gold';
+      updatedSpecs.metal = '18 KT Yellow Gold';
       updatedSpecs.gems = 'Emerald';
       updatedSpecs.notes = 'Intricate pendant with surrounded emerald cut.';
-      reply = "An emerald pendant is incredibly timeless! I've updated the settings to a 'Pendant' in 18K Yellow Gold. Would you like a halo of small diamonds surrounding the emerald?";
+      reply = "An emerald pendant is incredibly timeless! I've updated the settings to a 'Pendant' in 18 KT Yellow Gold. Would you like a halo of small diamonds surrounding the emerald?";
     } else if (lower.includes('earring') || lower.includes('halo')) {
       updatedSpecs.category = 'Earrings';
-      updatedSpecs.metal = '14K White Gold';
+      updatedSpecs.metal = '14 KT White Gold';
       updatedSpecs.gems = 'Diamond (Halo)';
       updatedSpecs.notes = 'Round cut diamond earrings with halo.';
-      reply = "Brilliant halo earrings! I have modified the selection to 'Earrings'. Do you prefer 14K, 18K, or platinum settings?";
+      reply = "Brilliant halo earrings! I have modified the selection to 'Earrings'. Do you prefer 9 KT, 14 KT, or 18 KT settings?";
     } else if (lower.includes('bracelet') || lower.includes('sapphire')) {
       updatedSpecs.category = 'Bracelet';
-      updatedSpecs.metal = 'Platinum';
+      updatedSpecs.metal = '18 KT White Gold';
       updatedSpecs.gems = 'Sapphire & Diamond';
-      updatedSpecs.notes = 'Platinum bracelet encrusted with diamonds and sapphires.';
+      updatedSpecs.notes = '18 KT White Gold bracelet encrusted with diamonds and sapphires.';
       reply = "A sapphire tennis bracelet is a majestic choice. I've adjusted the configurator. What length or wrist size should we target?";
-    } else if (lower.includes('gold') || lower.includes('platinum') || lower.includes('silver')) {
-      if (lower.includes('platinum')) {
-        updatedSpecs.metal = 'Platinum';
-      } else if (lower.includes('yellow')) {
-        updatedSpecs.metal = '18K Yellow Gold';
+    } else if (lower.includes('gold')) {
+      if (lower.includes('yellow')) {
+        updatedSpecs.metal = '18 KT Yellow Gold';
       } else if (lower.includes('rose')) {
-        updatedSpecs.metal = '18K Rose Gold';
+        updatedSpecs.metal = '18 KT Rose Gold';
       } else {
-        updatedSpecs.metal = '18K White Gold';
+        updatedSpecs.metal = '18 KT White Gold';
       }
       reply = `Got it! Selecting ${updatedSpecs.metal} setting. We should now look at the gemstones. Would you prefer diamonds, emeralds, rubies, or sapphires?`;
     } else if (lower.includes('diamond') || lower.includes('ruby') || lower.includes('emerald') || lower.includes('sapphire')) {
@@ -389,7 +390,7 @@ export function AiStudioPage() {
                   onChange={(e) => setSpecs({ ...specs, metal: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-150 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-emerald-400 transition-all font-semibold"
                 >
-                  {['18K White Gold', '18K Yellow Gold', '18K Rose Gold', '14K Gold', '22K Gold', 'Platinum', 'Sterling Silver'].map((m) => (
+                  {METAL_SETTING_OPTIONS.map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
@@ -397,12 +398,15 @@ export function AiStudioPage() {
 
               <div>
                 <label className="block text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">Karat</label>
-                <input
+                <select
                   value={specs.karat}
                   onChange={(e) => setSpecs({ ...specs, karat: e.target.value })}
-                  placeholder="e.g. 18K"
                   className="w-full bg-slate-50 border border-slate-150 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-emerald-400 transition-all font-semibold"
-                />
+                >
+                  {KARAT_OPTIONS.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
               </div>
 
               <div>

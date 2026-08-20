@@ -9,7 +9,7 @@ export interface NavItem {
 
 export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard',      path: '/dashboard/super-admin',               icon: 'LayoutDashboard', description: 'Overview & metrics' },
-  { label: 'Projects',       path: '/dashboard/super-admin/projects',      icon: 'Briefcase',       description: 'Manage projects' },
+  { label: 'Orders',         path: '/dashboard/super-admin/orders',        icon: 'Briefcase',       description: 'Manage orders' },
   { label: 'Chats',          path: '/dashboard/super-admin/chats',         icon: 'MessageSquare',   description: 'Platform chats' },
   { label: 'Users',          path: '/dashboard/super-admin/users',         icon: 'Users',           description: 'Manage all users' },
   { label: 'Dynamic Fields', path: '/dashboard/super-admin/dynamic-fields',icon: 'Sliders',         description: 'Custom field management' },
@@ -19,7 +19,7 @@ export const SUPER_ADMIN_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard',  path: '/dashboard/admin',            icon: 'LayoutDashboard', description: 'Overview & metrics' },
-  { label: 'Projects',   path: '/dashboard/admin/projects',   icon: 'Briefcase',       description: 'Manage projects' },
+  { label: 'Orders',     path: '/dashboard/admin/orders',     icon: 'Briefcase',       description: 'Manage orders' },
   { label: 'Customers',  path: '/dashboard/admin/customers',  icon: 'UserCheck',       description: 'Manage customers' },
   { label: 'Designers',  path: '/dashboard/admin/designers',  icon: 'Palette',         description: 'Manage designers' },
   { label: 'Chats',      path: '/dashboard/admin/chats',      icon: 'MessageSquare',   description: 'Customer chats' },
@@ -35,7 +35,7 @@ export const CUSTOMER_NAV: NavItem[] = [
 
 export const DESIGNER_NAV: NavItem[] = [
   { label: 'Dashboard',          path: '/dashboard/designer',                     icon: 'LayoutDashboard', description: 'Your overview' },
-  { label: 'Assigned Projects',  path: '/dashboard/designer/assigned-projects',   icon: 'ClipboardList',   description: 'Projects assigned to you' },
+  { label: 'Assigned Orders',    path: '/dashboard/designer/assigned-orders',     icon: 'ClipboardList',   description: 'Orders assigned to you' },
   { label: 'Admin Chat',         path: '/dashboard/designer/chat',                icon: 'MessageSquare',   description: 'Chat with admin' },
   { label: 'Notifications',      path: '/dashboard/designer/notifications',        icon: 'Bell',            description: 'Your notifications' },
 ];
