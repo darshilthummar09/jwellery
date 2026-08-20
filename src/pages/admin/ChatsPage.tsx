@@ -6,6 +6,7 @@ import { PageTitle } from '../../components/common/PageTitle';
 import { Avatar } from '../../components/common/Avatar';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ChatAttachment, useChatNotification } from '../../context/ChatNotificationContext';
+import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 
 function getAttachmentKind(file: File): ChatAttachment['kind'] {
   if (file.type.startsWith('image/')) return 'image';
@@ -17,15 +18,6 @@ function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 function AttachmentList({
@@ -132,14 +124,24 @@ export function ChatsPage() {
     if (!files?.length) return;
 
     const attachments = await Promise.all(
-      Array.from(files).map(async (file, index) => ({
-        id: Date.now() + index,
-        name: file.name,
-        size: file.size,
-        type: file.type || 'application/octet-stream',
-        url: await readFileAsDataUrl(file),
-        kind: getAttachmentKind(file),
-      }))
+      Array.from(files).map(async (file, index) => {
+        const kind = getAttachmentKind(file);
+        // Images are resized/re-encoded before storage -- a real photo can
+        // otherwise blow past the browser's localStorage quota and silently
+        // fail to save (see imageCompression.ts).
+        const { url, size } =
+          kind === 'image'
+            ? await compressImageFile(file).then((r) => ({ url: r.dataUrl, size: r.size }))
+            : { url: await readFileAsDataUrl(file), size: file.size };
+        return {
+          id: Date.now() + index,
+          name: file.name,
+          size,
+          type: kind === 'image' ? 'image/jpeg' : file.type || 'application/octet-stream',
+          url,
+          kind,
+        };
+      })
     );
 
     setPendingAttachments((current) => [...current, ...attachments]);

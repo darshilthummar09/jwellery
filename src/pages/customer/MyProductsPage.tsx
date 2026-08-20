@@ -17,6 +17,7 @@ import { useChatNotification } from '../../context/ChatNotificationContext';
 import type { OrderAttachment, OrderDetails, Order } from '../../context/ChatNotificationContext';
 import { useAuth } from '../../hooks/useAuth';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
+import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 import {
   Dialog,
   DialogContent,
@@ -98,15 +99,6 @@ function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
@@ -312,14 +304,19 @@ export function MyProductsPage() {
 
       const newFiles: UploadedFile[] = await Promise.all(
         toProcess.map(async (file, i) => {
-          const dataUrl = await readAsDataUrl(file);
           const isImage = file.type.startsWith('image/');
           const isPdf = file.type === 'application/pdf';
+          // Images are resized/re-encoded before storage -- a real phone photo
+          // (2-8MB) otherwise blows past the browser's localStorage quota for
+          // the whole app and silently fails to save (see imageCompression.ts).
+          const { dataUrl, size } = isImage
+            ? await compressImageFile(file)
+            : { dataUrl: await readFileAsDataUrl(file), size: file.size };
           return {
             id: Date.now() + i,
             name: file.name,
-            size: file.size,
-            type: file.type,
+            size,
+            type: isImage ? 'image/jpeg' : file.type,
             dataUrl,
             kind: isImage ? 'image' : isPdf ? 'pdf' : 'file',
           };
