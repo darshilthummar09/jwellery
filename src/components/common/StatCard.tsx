@@ -40,7 +40,7 @@ export function StatCard({
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition-shadow ${
+      className={`bg-white rounded-2xl border border-slate-100 p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow ${
         onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-100' : ''
       }`}
       role={onClick ? 'button' : undefined}

@@ -39,7 +39,7 @@ export function CustomerDashboard() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-5 mb-8">
         <StatCard title="Active Orders"     value={activeOrders.length.toString()} icon={ShoppingBag}  color="emerald" />
         <StatCard title="Ready for Pickup"  value={readyOrders.length.toString()} icon={CheckCircle2} color="blue"    />
         <StatCard title="Avg. Delivery"     value={activeOrders.length > 0 ? "3 weeks" : "-"} icon={Clock}        color="purple"  />

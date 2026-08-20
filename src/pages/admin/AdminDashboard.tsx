@@ -73,7 +73,7 @@ export function AdminDashboard() {
         className="mb-6 sm:mb-8"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 mb-6 sm:mb-8">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
         <StatCard title="Active Orders" value={activeOrders.length.toString()} icon={Briefcase}     color="emerald" onClick={() => navigate('/dashboard/admin/orders')} />
         <StatCard title="Customers"     value={totalCustomers.toString()} icon={Users}         color="blue" onClick={() => navigate('/dashboard/admin/customers')} />
         <StatCard title="Designers"     value={totalDesigners.toString()} icon={TrendingUp}    color="purple" onClick={() => navigate('/dashboard/admin/designers')} />

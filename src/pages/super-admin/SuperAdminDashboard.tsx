@@ -73,7 +73,7 @@ export function SuperAdminDashboard() {
       />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 mb-6 sm:mb-8">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
         <StatCard title="Active Orders"     value={activeOrders.length.toString()} icon={Briefcase} color="emerald" onClick={() => navigate('/dashboard/super-admin/orders')} />
         <StatCard title="Total Users"       value={totalUsers.toString()}   icon={Users}    color="blue" onClick={() => navigate('/dashboard/super-admin/users')} />
         <StatCard title="Active Categories" value={totalCategories.toString()}   icon={Tag}      color="purple" onClick={() => navigate('/dashboard/super-admin/categories')} />
