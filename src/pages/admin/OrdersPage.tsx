@@ -307,23 +307,30 @@ export function OrdersPage() {
               <option value="Low">Low</option>
             </select>
 
-            {/* Single Date Picker (click anywhere opens picker) */}
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => setDateFilter(event.target.value)}
-              onClick={(e) => {
-                try {
-                  e.currentTarget.showPicker();
-                } catch {
-                  // ignore
-                }
-              }}
-              aria-label="Filter by date"
-              className={`w-full sm:w-auto bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer ${
-                dateFilter ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
-              }`}
-            />
+            {/* Single Date Picker (with visible label on iPhone Safari & all browsers) */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
+              <div
+                className={`w-full sm:w-auto flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto pointer-events-none transition-all truncate ${
+                  dateFilter ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
+                }`}
+              >
+                <span className="truncate">
+                  {dateFilter
+                    ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'All Dates'}
+                </span>
+              </div>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(event) => setDateFilter(event.target.value)}
+                aria-label="Filter by date"
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 
