@@ -237,51 +237,55 @@ export function OrdersPage() {
 
   return (
     <PageContainer>
-      <PageTitle
-        title="Orders"
-        subtitle="Manage all jewellery design orders."
-        className="mb-6 sm:mb-8"
-        action={
-          <button onClick={openNewOrderModal} className="flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-[0.98]">
-            <Plus size={16} />
-            New Order
-          </button>
-        }
-      />
+      <div className="flex items-center justify-between gap-3 mb-3.5 sm:mb-8">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Orders</h1>
+          <p className="hidden sm:block text-sm text-slate-500 mt-0.5">Manage all jewellery design orders.</p>
+        </div>
+        <button
+          onClick={openNewOrderModal}
+          className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-xs transition-all active:scale-[0.98] cursor-pointer flex-shrink-0"
+        >
+          <Plus size={15} />
+          <span>New Order</span>
+        </button>
+      </div>
 
       {clientFilter && (
-        <div className="mb-4 flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+        <div className="mb-3 flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
             Filtered by client: {clientFilter.name}
-            <button onClick={() => setClientFilter(null)} aria-label="Clear client filter" className="hover:text-emerald-900">
-              <X size={13} />
+            <button onClick={() => setClientFilter(null)} aria-label="Clear client filter" className="hover:text-emerald-900 ml-0.5">
+              <X size={12} />
             </button>
           </span>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-slate-500">{filteredOrders.length} order{filteredOrders.length === 1 ? '' : 's'}</span>
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
+        <div className="px-3.5 sm:px-6 py-2.5 sm:py-4 border-b border-slate-100 flex flex-col gap-2 sm:gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs sm:text-sm font-medium text-slate-500">
+              {filteredOrders.length} order{filteredOrders.length === 1 ? '' : 's'}
+            </span>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="text-xs font-medium text-emerald-600 hover:underline flex-shrink-0">
+              <button onClick={clearFilters} className="text-xs font-semibold text-emerald-600 hover:underline flex-shrink-0 cursor-pointer">
                 Clear filters
               </button>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-3">
             {/* Status Dropdown */}
             <div className="relative inline-flex items-center w-full sm:w-auto">
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as 'All' | OrderStatus)}
-                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-sm font-medium rounded-xl pl-3.5 pr-8 py-2 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all cursor-pointer ${
-                  statusFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60' : 'border-slate-200 text-slate-700'
+                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl pl-2 sm:pl-3.5 pr-5 sm:pr-8 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer truncate ${
+                  statusFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
                 }`}
               >
-                <option value="All">All statuses</option>
+                <option value="All">Status</option>
                 <option value="Pending Approval">Pending Approval</option>
                 <option value="Approved">Approved</option>
                 <option value="Rejected">Rejected</option>
@@ -289,7 +293,7 @@ export function OrdersPage() {
                 <option value="Review">Review</option>
                 <option value="Completed">Completed</option>
               </select>
-              <ChevronDown size={14} className="absolute right-2.5 pointer-events-none text-slate-400" />
+              <ChevronDown size={12} className="absolute right-1.5 sm:right-2.5 pointer-events-none text-slate-400" />
             </div>
 
             {/* Priority Dropdown */}
@@ -297,16 +301,16 @@ export function OrdersPage() {
               <select
                 value={priorityFilter}
                 onChange={(event) => setPriorityFilter(event.target.value as 'All' | Order['priority'])}
-                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-sm font-medium rounded-xl pl-3.5 pr-8 py-2 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all cursor-pointer ${
-                  priorityFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60' : 'border-slate-200 text-slate-700'
+                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl pl-2 sm:pl-3.5 pr-5 sm:pr-8 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer truncate ${
+                  priorityFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
                 }`}
               >
-                <option value="All">All priorities</option>
+                <option value="All">Priority</option>
                 <option value="High">High</option>
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
               </select>
-              <ChevronDown size={14} className="absolute right-2.5 pointer-events-none text-slate-400" />
+              <ChevronDown size={12} className="absolute right-1.5 sm:right-2.5 pointer-events-none text-slate-400" />
             </div>
 
             {/* Date Filter - Click Anywhere to Open Date Picker Popup */}
@@ -318,22 +322,21 @@ export function OrdersPage() {
                   dateInputRef.current?.focus();
                 }
               }}
-              className={`relative inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-all cursor-pointer select-none w-full sm:w-auto justify-between sm:justify-start ${
+              className={`relative inline-flex items-center justify-between gap-1 px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto rounded-lg sm:rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer select-none w-full sm:w-auto ${
                 dateFilter
-                  ? 'bg-emerald-50/80 border-emerald-300 text-emerald-800 shadow-2xs'
+                  ? 'bg-emerald-50/80 border-emerald-300 text-emerald-800 font-semibold shadow-2xs'
                   : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-600 hover:text-slate-800'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Calendar size={15} className={dateFilter ? 'text-emerald-600' : 'text-slate-400'} />
-                <span>
+              <div className="flex items-center gap-1 sm:gap-2 truncate min-w-0">
+                <Calendar size={13} className={dateFilter ? 'text-emerald-600 flex-shrink-0' : 'text-slate-400 flex-shrink-0'} />
+                <span className="truncate">
                   {dateFilter
                     ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
-                        year: 'numeric',
                       })
-                    : 'Select Date'}
+                    : 'Date'}
                 </span>
               </div>
               {dateFilter ? (
@@ -343,15 +346,15 @@ export function OrdersPage() {
                     e.stopPropagation();
                     setDateFilter('');
                   }}
-                  className="ml-1 p-0.5 hover:bg-emerald-200/60 rounded-full text-emerald-700 transition-colors"
+                  className="p-0.5 hover:bg-emerald-200/60 rounded-full text-emerald-700 transition-colors flex-shrink-0"
                   title="Clear date"
                 >
-                  <X size={13} />
+                  <X size={11} />
                 </button>
               ) : (
-                <ChevronDown size={14} className="text-slate-400 ml-0.5 pointer-events-none" />
+                <ChevronDown size={12} className="text-slate-400 pointer-events-none flex-shrink-0" />
               )}
-              {/* Invisible native input covering container so clicking anywhere on any browser triggers the picker */}
+              {/* Invisible native input covering container so clicking anywhere triggers the picker */}
               <input
                 ref={dateInputRef}
                 type="date"
