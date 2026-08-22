@@ -277,93 +277,53 @@ export function OrdersPage() {
 
           <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-3">
             {/* Status Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as 'All' | OrderStatus)}
-                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl pl-2 sm:pl-3.5 pr-5 sm:pr-8 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer truncate ${
-                  statusFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
-                }`}
-              >
-                <option value="All">Status</option>
-                <option value="Pending Approval">Pending Approval</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Review">Review</option>
-                <option value="Completed">Completed</option>
-              </select>
-              <ChevronDown size={12} className="absolute right-1.5 sm:right-2.5 pointer-events-none text-slate-400" />
-            </div>
-
-            {/* Priority Dropdown */}
-            <div className="relative inline-flex items-center w-full sm:w-auto">
-              <select
-                value={priorityFilter}
-                onChange={(event) => setPriorityFilter(event.target.value as 'All' | Order['priority'])}
-                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl pl-2 sm:pl-3.5 pr-5 sm:pr-8 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer truncate ${
-                  priorityFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
-                }`}
-              >
-                <option value="All">Priority</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-              <ChevronDown size={12} className="absolute right-1.5 sm:right-2.5 pointer-events-none text-slate-400" />
-            </div>
-
-            {/* Date Filter - Click Anywhere to Open Date Picker Popup */}
-            <div
-              onClick={() => {
-                try {
-                  dateInputRef.current?.showPicker();
-                } catch {
-                  dateInputRef.current?.focus();
-                }
-              }}
-              className={`relative inline-flex items-center justify-between gap-1 px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto rounded-lg sm:rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer select-none w-full sm:w-auto ${
-                dateFilter
-                  ? 'bg-emerald-50/80 border-emerald-300 text-emerald-800 font-semibold shadow-2xs'
-                  : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-600 hover:text-slate-800'
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as 'All' | OrderStatus)}
+              className={`w-full sm:w-auto bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer truncate ${
+                statusFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
               }`}
             >
-              <div className="flex items-center gap-1 sm:gap-2 truncate min-w-0">
-                <Calendar size={13} className={dateFilter ? 'text-emerald-600 flex-shrink-0' : 'text-slate-400 flex-shrink-0'} />
-                <span className="truncate">
-                  {dateFilter
-                    ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'Date'}
-                </span>
-              </div>
-              {dateFilter ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDateFilter('');
-                  }}
-                  className="p-0.5 hover:bg-emerald-200/60 rounded-full text-emerald-700 transition-colors flex-shrink-0"
-                  title="Clear date"
-                >
-                  <X size={11} />
-                </button>
-              ) : (
-                <ChevronDown size={12} className="text-slate-400 pointer-events-none flex-shrink-0" />
-              )}
-              {/* Invisible native input covering container so clicking anywhere triggers the picker */}
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+              <option value="All">All Statuses</option>
+              <option value="Pending Approval">Pending Approval</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Review">Review</option>
+              <option value="Completed">Completed</option>
+            </select>
+
+            {/* Priority Dropdown */}
+            <select
+              value={priorityFilter}
+              onChange={(event) => setPriorityFilter(event.target.value as 'All' | Order['priority'])}
+              className={`w-full sm:w-auto bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer truncate ${
+                priorityFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
+              }`}
+            >
+              <option value="All">All Priorities</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+
+            {/* Single Date Picker (click anywhere opens picker) */}
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker();
+                } catch {
+                  // ignore
+                }
+              }}
+              aria-label="Filter by date"
+              className={`w-full sm:w-auto bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100 transition-all cursor-pointer ${
+                dateFilter ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
+              }`}
+            />
           </div>
         </div>
 
