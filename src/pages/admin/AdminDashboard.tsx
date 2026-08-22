@@ -57,7 +57,7 @@ export function AdminDashboard() {
   const openChatsCount = threads.filter(t => t.unread > 0).length;
 
   const totalCustomers = MOCK_USERS.filter(u => u.role === 'customer').length;
-  const totalDesigners = MOCK_USERS.filter(u => u.role === 'designer').length;
+  // const totalDesigners = MOCK_USERS.filter(u => u.role === 'designer').length;
 
   const clients = buildClientSummaries(orders).slice(0, 6);
 
@@ -73,10 +73,10 @@ export function AdminDashboard() {
         className="mb-6 sm:mb-8"
       />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-6 sm:mb-8">
         <StatCard title="Active Orders" value={activeOrders.length.toString()} icon={Briefcase}     color="emerald" onClick={() => navigate('/dashboard/admin/orders')} />
         <StatCard title="Customers"     value={totalCustomers.toString()} icon={Users}         color="blue" onClick={() => navigate('/dashboard/admin/customers')} />
-        <StatCard title="Designers"     value={totalDesigners.toString()} icon={TrendingUp}    color="purple" onClick={() => navigate('/dashboard/admin/designers')} />
+        {/* <StatCard title="Designers"     value={totalDesigners.toString()} icon={TrendingUp}    color="purple" onClick={() => navigate('/dashboard/admin/designers')} /> */}
         <StatCard title="Open Chats"    value={openChatsCount.toString()} icon={MessageSquare} color="orange" onClick={() => navigate('/dashboard/admin/chats')} />
       </div>
 

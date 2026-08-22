@@ -31,6 +31,27 @@ function loadImageAsJpeg(dataUrl: string): Promise<{ dataUrl: string; width: num
   });
 }
 
+function loadLogoImage(): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx || !canvas.width || !canvas.height) {
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      resolve({ dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/logo.png';
+  });
+}
+
 export interface GeneratedOrderPdf {
   dataUri: string;
   fileName: string;
@@ -52,17 +73,41 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
     }
   };
 
+  // Load Company Logo
+  const logo = await loadLogoImage();
+
   // Header band
-  doc.setFillColor(5, 150, 105); // emerald-600
-  doc.rect(0, 0, PAGE_WIDTH, 64, 'F');
-  doc.setTextColor(255, 255, 255);
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, PAGE_WIDTH, 70, 'F');
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(1);
+  doc.line(0, 70, PAGE_WIDTH, 70);
+
+  if (logo) {
+    const logoMaxH = 40;
+    const scale = logoMaxH / logo.height;
+    const logoW = logo.width * scale;
+    const logoH = logo.height * scale;
+    const logoY = (70 - logoH) / 2;
+    doc.addImage(logo.dataUrl, 'PNG', MARGIN, logoY, logoW, logoH);
+  } else {
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Dream Jewels', MARGIN, 42);
+  }
+
+  // Right side of header: Order Specification Brief
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('Dream Jewels — Order Specification', MARGIN, 38);
+  doc.setFontSize(12);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text('ORDER SPECIFICATION', PAGE_WIDTH - MARGIN, 36, { align: 'right' });
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Internal design brief for the production team', MARGIN, 52);
-  y = 64 + 28;
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Order ID: ${order.id}`, PAGE_WIDTH - MARGIN, 50, { align: 'right' });
+
+  y = 70 + 24;
 
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
@@ -79,13 +124,13 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
   // Key/value field grid, two columns
   const fields: [string, string][] = [
     ['Customer', order.customerName || '—'],
-    ['Designer', order.designerName || '—'],
-    ['Metal', order.metal ? `${order.metal}${order.karat ? ` (${order.karat})` : ''}` : '—'],
+    ['Created Date', order.created || '—'],
+    ['Metal & Purity', order.metal ? `${order.metal}${order.karat ? ` (${order.karat})` : ''}` : '—'],
+    ['Wanted By (Target Date)', order.due || order.deliveryDate || order.budget || '—'],
     ['Size', order.size || 'Not specified'],
     ['Weight', order.weight || 'Not specified'],
-    ['Budget', order.budget || '—'],
-    ['Order Date', order.created || '—'],
-    ['Due Date', order.due || '—'],
+    ['Priority', order.priority || 'Medium'],
+    ['Status', order.status || 'Pending Approval'],
   ];
 
   const colWidth = CONTENT_WIDTH / 2;
@@ -183,21 +228,48 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
   }
 
   if (nonImageAssets.length > 0) {
-    ensureSpace(20 + nonImageAssets.length * 13);
+    ensureSpace(36 + nonImageAssets.length * 28);
+    doc.setDrawColor(226, 232, 240);
+    doc.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
+    y += 18;
     doc.setFontSize(9);
     doc.setTextColor(148, 163, 184);
-    doc.text('ADDITIONAL FILES (see chat thread for originals)', MARGIN, y);
-    y += 14;
-    doc.setFontSize(9.5);
-    doc.setTextColor(51, 65, 85);
+    doc.text(`ATTACHED PDF DOCUMENTS & SPECIFICATIONS (${nonImageAssets.length})`, MARGIN, y);
+    y += 16;
+
     nonImageAssets.forEach((file) => {
-      ensureSpace(13);
-      doc.text(`• ${file.name}`, MARGIN, y);
-      y += 13;
+      ensureSpace(28);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 24, 4, 4, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 24, 4, 4, 'D');
+
+      // Red PDF badge
+      doc.setFillColor(239, 68, 68);
+      doc.roundedRect(MARGIN + 6, y + 5, 26, 14, 2, 2, 'F');
+      doc.setFontSize(7.5);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PDF', MARGIN + 12, y + 15);
+
+      // File name & size
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(9);
+      doc.text(file.name.length > 60 ? `${file.name.slice(0, 57)}...` : file.name, MARGIN + 38, y + 15);
+
+      if (file.size) {
+        doc.setTextColor(148, 163, 184);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${(file.size / 1024).toFixed(1)} KB`, PAGE_WIDTH - MARGIN - 10, y + 15, { align: 'right' });
+      }
+
+      y += 30;
     });
+    y += 6;
   }
 
-  // Footer on every page
+  // Footer on base brief pages
   const pageCount = doc.getNumberOfPages();
   const generatedAt = new Date().toLocaleString();
   for (let p = 1; p <= pageCount; p++) {
@@ -208,9 +280,45 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
     doc.text(`Page ${p} of ${pageCount}`, PAGE_WIDTH - MARGIN - 60, PAGE_HEIGHT - 20);
   }
 
+  const pdfAssets = (order.images ?? []).filter(
+    (file) => file.url && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') || file.url.startsWith('data:application/pdf'))
+  );
+
   const safeName = (order.name || 'order').replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/(^-|-$)/g, '');
   const fileName = `${safeName || 'order'}-brief.pdf`;
-  const dataUri = doc.output('datauristring');
+  let dataUri = doc.output('datauristring');
+
+  // If customer uploaded PDF documents, merge their actual full pages into this PDF
+  if (pdfAssets.length > 0) {
+    try {
+      const { PDFDocument } = await import('pdf-lib');
+      const basePdfBytes = doc.output('arraybuffer');
+      const mergedPdf = await PDFDocument.load(basePdfBytes);
+
+      for (const asset of pdfAssets) {
+        try {
+          const res = await fetch(asset.url);
+          const pdfBytes = await res.arrayBuffer();
+          const uploadedDoc = await PDFDocument.load(pdfBytes);
+          const copiedPages = await mergedPdf.copyPages(uploadedDoc, uploadedDoc.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } catch (err) {
+          console.warn(`Could not append PDF page for ${asset.name}:`, err);
+        }
+      }
+
+      const mergedBytes = await mergedPdf.save();
+      let binary = '';
+      const len = mergedBytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(mergedBytes[i]);
+      }
+      const base64 = btoa(binary);
+      dataUri = `data:application/pdf;base64,${base64}`;
+    } catch (err) {
+      console.warn('PDF merging error, falling back to base PDF:', err);
+    }
+  }
 
   return { dataUri, fileName, approxSize: Math.round((dataUri.length * 3) / 4) };
 }

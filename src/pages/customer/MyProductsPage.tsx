@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router';
 import {
   CheckCircle,
   Clock,
@@ -10,6 +10,8 @@ import {
   Sparkles,
   Upload,
   X,
+  MessageCircle,
+  Calendar,
 } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -123,6 +125,7 @@ function StatusBadge({ status }: { status: string }) {
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
 function ProductCard({ order }: { order: Order }) {
+  const navigate = useNavigate();
   const emoji = CATEGORY_EMOJIS[order.category] || '👑';
 
   return (
@@ -209,8 +212,26 @@ function ProductCard({ order }: { order: Order }) {
           </div>
         )}
 
-        {/* Budget */}
-        <p className="font-bold text-emerald-600 text-base mt-3">{order.budget}</p>
+        {/* Actions bar at bottom of card */}
+        <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+              <Calendar size={14} />
+            </div>
+            <div>
+              <span className="block text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Wanted By</span>
+              <p className="font-bold text-slate-800 text-xs">{order.due || order.created || 'To be scheduled'}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(`/dashboard/customer/chat?orderId=${encodeURIComponent(order.id)}&orderName=${encodeURIComponent(order.name)}`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white text-xs font-semibold rounded-xl border border-emerald-200 hover:border-emerald-600 transition-all shadow-xs group/chat cursor-pointer"
+            title="Chat with support about this piece"
+          >
+            <MessageCircle size={13} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
+            <span>Chat</span>
+          </button>
+        </div>
       </div>
     </div>
   );

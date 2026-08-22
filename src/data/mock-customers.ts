@@ -10,6 +10,7 @@ export interface Customer {
 
 export const INITIAL_CUSTOMERS: Customer[] = [
   { id: 'usr_customer_001', name: 'Priya Patel', email: 'customer1@dreamjewels.com', orders: 0, spent: 'Rs. 0', joined: 'Jan 2024', phone: '+91 98765 10001' },
+  { id: 'usr_customer_002', name: 'Aarav Shah', email: 'customer2@dreamjewels.com', orders: 0, spent: 'Rs. 0', joined: 'Jan 2024', phone: '+91 98765 10002' },
 ];
 
 export const blankCustomer: Customer = {

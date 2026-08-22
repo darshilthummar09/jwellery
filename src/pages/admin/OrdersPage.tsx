@@ -1,6 +1,6 @@
-import { FormEvent, useMemo, useState, useEffect } from 'react';
+import { FormEvent, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Check, Clock, Filter, Plus, X, CalendarRange, Image as ImageIcon, FileDown, Send } from 'lucide-react';
+import { Check, Clock, Plus, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { DetailCard } from '../../components/common/DetailCard';
@@ -49,12 +49,12 @@ const emptyOrder = (nextId: string): Order => ({
   name: '',
   customerId: `manual-${Date.now()}`,
   customerName: '',
-  designerName: 'Riya Sharma',
+  designerName: '',
   status: 'Pending Approval',
   due: '',
   budget: '',
   priority: 'Medium',
-  category: '',
+  category: 'Rings',
   metal: METAL_OPTIONS[0],
   karat: KARAT_OPTIONS[2],
   progress: '0%',
@@ -66,17 +66,17 @@ export function OrdersPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { orders, ensureDesignerThread, sendAdminMessage, upsertOrder, approveOrder, rejectOrder, deleteOrder } = useChatNotification();
+  const { orders, upsertOrder, approveOrder, rejectOrder, deleteOrder } = useChatNotification();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [pdfBusyOrderId, setPdfBusyOrderId] = useState<string | null>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter, setStatusFilter] = useState<'All' | OrderStatus>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | Order['priority']>('All');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [clientFilter, setClientFilter] = useState<{ id: string; name: string } | null>(null);
 
   // Auto-select order from query param ?id=...
@@ -110,23 +110,35 @@ export function OrdersPage() {
       if (statusFilter !== 'All' && order.status !== statusFilter) return false;
       if (priorityFilter !== 'All' && order.priority !== priorityFilter) return false;
       if (clientFilter && order.customerId !== clientFilter.id && order.customerName !== clientFilter.name) return false;
-      if (dateFrom || dateTo) {
-        const created = new Date(order.created);
-        if (isNaN(created.getTime())) return false;
-        if (dateFrom && created < new Date(dateFrom)) return false;
-        if (dateTo && created > new Date(`${dateTo}T23:59:59`)) return false;
+      if (dateFilter) {
+        const filterDateFormatted = new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+        const createdDate = new Date(order.created);
+        const orderIso = !isNaN(createdDate.getTime()) ? createdDate.toISOString().split('T')[0] : '';
+        const matchesCreated =
+          order.created === dateFilter ||
+          order.created === filterDateFormatted ||
+          orderIso === dateFilter ||
+          order.created?.toLowerCase().includes(filterDateFormatted.toLowerCase());
+        const matchesDue =
+          order.due === dateFilter ||
+          order.due === filterDateFormatted ||
+          order.due?.toLowerCase().includes(filterDateFormatted.toLowerCase());
+        if (!matchesCreated && !matchesDue) return false;
       }
       return true;
     });
-  }, [orders, statusFilter, priorityFilter, dateFrom, dateTo, clientFilter]);
+  }, [orders, statusFilter, priorityFilter, dateFilter, clientFilter]);
 
-  const hasActiveFilters = statusFilter !== 'All' || priorityFilter !== 'All' || !!dateFrom || !!dateTo || !!clientFilter;
+  const hasActiveFilters = statusFilter !== 'All' || priorityFilter !== 'All' || !!dateFilter || !!clientFilter;
 
   const clearFilters = () => {
     setStatusFilter('All');
     setPriorityFilter('All');
-    setDateFrom('');
-    setDateTo('');
+    setDateFilter('');
     setClientFilter(null);
   };
 
@@ -144,16 +156,6 @@ export function OrdersPage() {
     setEditingOrder(null);
   };
 
-  const openDesignerChat = () => {
-    if (!selectedOrder) return;
-
-    const threadId = ensureDesignerThread(selectedOrder.designerName, selectedOrder.name);
-    setSelectedOrder(null);
-
-    const chatsPath = user?.role === 'super-admin' ? '/dashboard/super-admin/chats' : '/dashboard/admin/chats';
-    navigate(`${chatsPath}?thread=${encodeURIComponent(threadId)}`);
-  };
-
   const handleApproveOrder = (order: Order) => {
     approveOrder(order.id);
     setSelectedOrder({ ...order, status: 'Approved' });
@@ -169,8 +171,7 @@ export function OrdersPage() {
     setRejectionReason('');
   };
 
-  // Always regenerated fresh from the current order fields (never cached) so that
-  // if the admin edits missing/wrong info first, the PDF reflects that latest data.
+  // Generate & Download PDF
   const handleGeneratePdf = async (order: Order) => {
     setPdfBusyOrderId(order.id);
     try {
@@ -181,30 +182,58 @@ export function OrdersPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
     } finally {
       setPdfBusyOrderId(null);
     }
   };
 
-  const handleSendPdfToDesigner = async (order: Order) => {
+  // Generate & Share PDF via System Web Share or Apps
+  const handleSharePdf = async (order: Order) => {
     setPdfBusyOrderId(order.id);
     try {
       const { dataUri, fileName } = await generateOrderPdf(order, user?.name ?? 'Admin');
-      const threadId = ensureDesignerThread(order.designerName, order.name);
-      sendAdminMessage(
-        threadId,
-        `📎 Design brief for "${order.name}" — full order details and images attached as PDF.`,
-        [{ id: Date.now(), name: fileName, size: Math.round((dataUri.length * 3) / 4), type: 'application/pdf', url: dataUri, kind: 'file' }]
-      );
-      setSelectedOrder(null);
-      const chatsPath = user?.role === 'super-admin' ? '/dashboard/super-admin/chats' : '/dashboard/admin/chats';
-      navigate(`${chatsPath}?thread=${encodeURIComponent(threadId)}`);
+
+      // Convert dataUri to Blob/File for native Web Share API
+      const res = await fetch(dataUri);
+      const blob = await res.blob();
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Order Specification - ${order.name}`,
+          text: `Order Brief for "${order.name}" (${order.customerName}) — Dream Jewels`,
+        });
+      } else if (navigator.share) {
+        await navigator.share({
+          title: `Order Specification - ${order.name}`,
+          text: `Order ${order.id}: ${order.name} | Customer: ${order.customerName} | Metal: ${order.metal} (${order.karat}) | Target: ${order.due || 'To be scheduled'}`,
+        });
+      } else {
+        // Fallback: Download the PDF and copy order brief to clipboard
+        const link = document.createElement('a');
+        link.href = dataUri;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        const summary = `Order ${order.id}: ${order.name}\nCustomer: ${order.customerName}\nMetal: ${order.metal} (${order.karat})\nTarget Date: ${order.due || 'To be scheduled'}`;
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(summary);
+        }
+        alert('PDF downloaded! Order details summary copied to clipboard to share.');
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('Error sharing PDF:', err);
+      }
     } finally {
       setPdfBusyOrderId(null);
     }
   };
-
-  const canGeneratePdf = (order: Order) => order.status !== 'Pending Approval' && order.status !== 'Rejected';
 
   return (
     <PageContainer>
@@ -242,13 +271,15 @@ export function OrdersPage() {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-500 w-full sm:w-auto">
-              <Filter size={14} className="flex-shrink-0" />
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            {/* Status Dropdown */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as 'All' | OrderStatus)}
-                className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-sm outline-none focus:border-emerald-400"
+                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-sm font-medium rounded-xl pl-3.5 pr-8 py-2 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all cursor-pointer ${
+                  statusFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60' : 'border-slate-200 text-slate-700'
+                }`}
               >
                 <option value="All">All statuses</option>
                 <option value="Pending Approval">Pending Approval</option>
@@ -258,38 +289,76 @@ export function OrdersPage() {
                 <option value="Review">Review</option>
                 <option value="Completed">Completed</option>
               </select>
-            </label>
+              <ChevronDown size={14} className="absolute right-2.5 pointer-events-none text-slate-400" />
+            </div>
 
-            <label className="flex items-center gap-2 text-sm text-slate-500 w-full sm:w-auto">
-              <span className="w-3.5 h-3.5 rounded-full bg-red-400 flex-shrink-0" />
+            {/* Priority Dropdown */}
+            <div className="relative inline-flex items-center w-full sm:w-auto">
               <select
                 value={priorityFilter}
                 onChange={(event) => setPriorityFilter(event.target.value as 'All' | Order['priority'])}
-                className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-sm outline-none focus:border-emerald-400"
+                className={`w-full sm:w-auto appearance-none bg-slate-50 hover:bg-slate-100/80 border text-sm font-medium rounded-xl pl-3.5 pr-8 py-2 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all cursor-pointer ${
+                  priorityFilter !== 'All' ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60' : 'border-slate-200 text-slate-700'
+                }`}
               >
                 <option value="All">All priorities</option>
                 <option value="High">High</option>
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
               </select>
-            </label>
+              <ChevronDown size={14} className="absolute right-2.5 pointer-events-none text-slate-400" />
+            </div>
 
-            <div className="flex items-center gap-2 text-sm text-slate-500 w-full sm:w-auto">
-              <CalendarRange size={14} className="flex-shrink-0" />
+            {/* Date Filter - Click Anywhere to Open Date Picker Popup */}
+            <div
+              onClick={() => {
+                try {
+                  dateInputRef.current?.showPicker();
+                } catch {
+                  dateInputRef.current?.focus();
+                }
+              }}
+              className={`relative inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-medium transition-all cursor-pointer select-none w-full sm:w-auto justify-between sm:justify-start ${
+                dateFilter
+                  ? 'bg-emerald-50/80 border-emerald-300 text-emerald-800 shadow-2xs'
+                  : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className={dateFilter ? 'text-emerald-600' : 'text-slate-400'} />
+                <span>
+                  {dateFilter
+                    ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })
+                    : 'Select Date'}
+                </span>
+              </div>
+              {dateFilter ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDateFilter('');
+                  }}
+                  className="ml-1 p-0.5 hover:bg-emerald-200/60 rounded-full text-emerald-700 transition-colors"
+                  title="Clear date"
+                >
+                  <X size={13} />
+                </button>
+              ) : (
+                <ChevronDown size={14} className="text-slate-400 ml-0.5 pointer-events-none" />
+              )}
+              {/* Invisible native input covering container so clicking anywhere on any browser triggers the picker */}
               <input
+                ref={dateInputRef}
                 type="date"
-                value={dateFrom}
-                onChange={(event) => setDateFrom(event.target.value)}
-                aria-label="From date"
-                className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-sm outline-none focus:border-emerald-400"
-              />
-              <span className="text-slate-300">–</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(event) => setDateTo(event.target.value)}
-                aria-label="To date"
-                className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base sm:text-sm outline-none focus:border-emerald-400"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
@@ -307,10 +376,10 @@ export function OrdersPage() {
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Image</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Order</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
-                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Designer</th>
+                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Category</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Priority</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Status</th>
-                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Budget</th>
+                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Wanted By</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Date</th>
                     <th className="text-right px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Actions</th>
                   </tr>
@@ -321,14 +390,14 @@ export function OrdersPage() {
                       <td className="px-6 py-4"><OrderThumb order={order} /></td>
                       <td className="px-6 py-4 font-medium text-slate-800">{order.name}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.customerName}</td>
-                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.designerName}</td>
+                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.category}</td>
                       <td className="px-6 py-4 whitespace-nowrap"><PriorityBadge priority={order.priority} /></td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[order.status]}`}>
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">{order.budget}</td>
+                      <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">{order.due || order.created || '-'}</td>
                       <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <Clock size={12} className="text-slate-300 flex-shrink-0" />
@@ -380,7 +449,7 @@ export function OrdersPage() {
                         </span>
                       </div>
                       <p className="font-semibold text-slate-800 text-sm mb-1">{order.name}</p>
-                      <p className="text-xs text-slate-500 mb-2">{order.customerName} · {order.designerName}</p>
+                      <p className="text-xs text-slate-500 mb-2">{order.customerName} · {order.category}</p>
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <PriorityBadge priority={order.priority} />
@@ -388,7 +457,7 @@ export function OrdersPage() {
                             <Clock size={11} /> {order.created}
                           </span>
                         </div>
-                        <span className="font-semibold text-slate-700 text-sm">{order.budget}</span>
+                        <span className="font-semibold text-slate-700 text-xs">{order.due || order.created}</span>
                       </div>
                     </div>
                   </div>
@@ -410,82 +479,239 @@ export function OrdersPage() {
       </div>
 
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" onClick={() => setSelectedOrder(null)}>
-          <div className="w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
-            <DetailCard
-              title={selectedOrder.name}
-              subtitle={selectedOrder.category}
-              className="shadow-2xl h-full sm:h-auto sm:rounded-2xl rounded-none"
-              onClose={() => setSelectedOrder(null)}
-              badge={<span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[selectedOrder.status]}`}>{selectedOrder.status}</span>}
-              fields={[
-                { label: 'Customer', value: selectedOrder.customerName },
-                { label: 'Designer', value: selectedOrder.designerName },
-                { label: 'Budget', value: selectedOrder.budget },
-                { label: 'Order Date', value: selectedOrder.created },
-                { label: 'Due Date', value: selectedOrder.due },
-                { label: 'Priority', value: <PriorityBadge priority={selectedOrder.priority} /> },
-                { label: 'Metal', value: `${selectedOrder.metal || 'Not specified'} ${selectedOrder.karat ? `(${selectedOrder.karat})` : ''}` },
-                { label: 'Size', value: selectedOrder.size || 'Not specified' },
-                { label: 'Weight', value: selectedOrder.weight || 'Not specified' },
-                { label: 'Progress', value: selectedOrder.progress },
-              ]}
-              actions={
-                <>
-                  {selectedOrder.status === 'Pending Approval' && (
-                    <>
-                      <button onClick={() => handleApproveOrder(selectedOrder)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">
-                        <Check size={14} /> Approve
-                      </button>
-                      <button onClick={() => setRejectingOrder(selectedOrder)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-xl transition-colors">
-                        <X size={14} /> Reject
-                      </button>
-                    </>
-                  )}
-                  <button onClick={() => setEditingOrder(selectedOrder)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-colors">Edit Order</button>
-                  <button onClick={openDesignerChat} className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-colors">Message Designer</button>
-                  {canGeneratePdf(selectedOrder) && (
-                    <>
-                      <button
-                        onClick={() => handleGeneratePdf(selectedOrder)}
-                        disabled={pdfBusyOrderId === selectedOrder.id}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-100 disabled:opacity-60 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-colors"
-                      >
-                        <FileDown size={14} /> {pdfBusyOrderId === selectedOrder.id ? 'Generating…' : 'Generate PDF'}
-                      </button>
-                      <button
-                        onClick={() => handleSendPdfToDesigner(selectedOrder)}
-                        disabled={pdfBusyOrderId === selectedOrder.id}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold rounded-xl transition-colors"
-                      >
-                        <Send size={14} /> {pdfBusyOrderId === selectedOrder.id ? 'Sending…' : 'Send PDF to Designer'}
-                      </button>
-                    </>
-                  )}
-                  <button onClick={() => setDeletingOrder(selectedOrder)} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded-xl transition-colors">Delete</button>
-                </>
-              }
-            >
-              <div className="bg-slate-50 rounded-xl px-4 py-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Notes</div>
-                <p className="text-sm text-slate-600 leading-relaxed">{selectedOrder.notes}</p>
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedOrder(null)}
+        >
+          <div
+            className="w-full max-w-3xl max-h-[92vh] sm:max-h-[88vh] bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {/* Fixed Header */}
+            <div className="px-5 sm:px-7 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-shrink-0 bg-white">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5 mb-1">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{selectedOrder.name}</h2>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[selectedOrder.status]}`}>
+                    {selectedOrder.status}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-500">{selectedOrder.category} · #{selectedOrder.id}</p>
               </div>
-              {selectedOrder.image && (
-                <div className="bg-slate-50 rounded-xl px-4 py-3 mt-3">
-                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">Sample Image / Sketch</div>
-                  <a href={selectedOrder.image} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden border border-slate-200 bg-white max-w-xs">
-                    <img src={selectedOrder.image} alt={selectedOrder.name} className="h-40 w-full object-cover" />
-                  </a>
-                  <p className="text-[10px] text-slate-400 mt-2">Additional files (PDFs, sketches) are visible in the customer's chat thread.</p>
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex-shrink-0"
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto px-5 sm:px-7 py-5 space-y-4 sm:space-y-5 custom-scrollbar">
+              {/* Specification Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Customer</p>
+                  <p className="text-sm font-semibold text-slate-800 truncate">{selectedOrder.customerName}</p>
+                </div>
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Created Date</p>
+                  <p className="text-sm font-semibold text-slate-800 truncate">{selectedOrder.created || 'Today'}</p>
+                </div>
+                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100/80">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider mb-1">Wanted By Date</p>
+                  <p className="text-sm font-bold text-emerald-900 truncate">{selectedOrder.due || selectedOrder.budget || 'To be scheduled'}</p>
+                </div>
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Priority</p>
+                  <div className="mt-0.5">
+                    <PriorityBadge priority={selectedOrder.priority} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Metal & Purity</p>
+                  <p className="text-sm font-semibold text-slate-800 truncate">
+                    {selectedOrder.metal || 'Not specified'} {selectedOrder.karat ? `(${selectedOrder.karat})` : ''}
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Size</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedOrder.size || 'Not specified'}</p>
+                </div>
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Weight</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedOrder.weight ? `${selectedOrder.weight}g` : 'Not specified'}</p>
+                </div>
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Crafting Progress</p>
+                  <p className="text-sm font-semibold text-slate-800">{selectedOrder.progress || '0%'}</p>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Custom Notes & Instructions</p>
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedOrder.notes || 'No special instructions provided.'}</p>
+              </div>
+
+              {/* Uploaded Reference Images */}
+              {((selectedOrder.images && selectedOrder.images.some((f) => f.type?.startsWith('image/'))) || selectedOrder.image) && (
+                <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+                    Reference Images & Sketches
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {selectedOrder.images && selectedOrder.images.length > 0
+                      ? selectedOrder.images
+                          .filter((f) => f.type?.startsWith('image/'))
+                          .map((img) => (
+                            <a
+                              key={img.id}
+                              href={img.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group block rounded-xl overflow-hidden border border-slate-200 bg-white hover:border-emerald-400 transition-all shadow-2xs"
+                            >
+                              <div className="h-32 sm:h-36 w-full overflow-hidden bg-slate-100 flex items-center justify-center">
+                                <img src={img.url} alt={img.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              </div>
+                              <div className="p-2.5 flex items-center justify-between text-xs text-slate-600 font-medium">
+                                <span className="truncate">{img.name}</span>
+                                <ExternalLink size={13} className="text-slate-400 flex-shrink-0 ml-1.5" />
+                              </div>
+                            </a>
+                          ))
+                      : selectedOrder.image && (
+                          <a
+                            href={selectedOrder.image}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group block rounded-xl overflow-hidden border border-slate-200 bg-white hover:border-emerald-400 transition-all shadow-2xs"
+                          >
+                            <img src={selectedOrder.image} alt={selectedOrder.name} className="h-32 sm:h-36 w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <div className="p-2.5 flex items-center justify-between text-xs text-slate-600 font-medium">
+                              <span className="truncate">{selectedOrder.name}</span>
+                              <ExternalLink size={13} className="text-slate-400 flex-shrink-0" />
+                            </div>
+                          </a>
+                        )}
+                  </div>
                 </div>
               )}
+
+              {/* Uploaded PDF Documents & Blueprints */}
+              {selectedOrder.images && selectedOrder.images.some((f) => !f.type?.startsWith('image/')) && (
+                <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+                    Attached PDF Documents & Blueprints
+                  </div>
+                  <div className="space-y-2.5">
+                    {selectedOrder.images
+                      .filter((f) => !f.type?.startsWith('image/'))
+                      .map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                              PDF
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{doc.name}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {doc.size ? `${(doc.size / 1024).toFixed(1)} KB · ` : ''}Merged in Spec Brief
+                              </p>
+                            </div>
+                          </div>
+                          <a
+                            href={doc.url}
+                            download={doc.name}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex-shrink-0 ml-2"
+                          >
+                            <Download size={13} />
+                            <span>Download</span>
+                          </a>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               {selectedOrder.rejectionReason && (
-                <div className="bg-red-50 rounded-xl px-4 py-3 mt-3 border border-red-100">
-                  <div className="text-xs font-medium uppercase tracking-wider text-red-400 mb-1">Rejection Reason</div>
+                <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-red-500 mb-1">Rejection Reason</div>
                   <p className="text-sm text-red-700 leading-relaxed">{selectedOrder.rejectionReason}</p>
                 </div>
               )}
-            </DetailCard>
+            </div>
+
+            {/* Fixed Sticky Footer Toolbar */}
+            <div className="px-5 sm:px-7 py-3.5 sm:py-4 border-t border-slate-100 bg-slate-50/90 flex flex-wrap items-center justify-between gap-2.5 flex-shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedOrder.status === 'Pending Approval' && (
+                  <>
+                    <button
+                      onClick={() => handleApproveOrder(selectedOrder)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Check size={14} /> Approve
+                    </button>
+                    <button
+                      onClick={() => setRejectingOrder(selectedOrder)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                    >
+                      <X size={14} /> Reject
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => setEditingOrder(selectedOrder)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Edit Order
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Generate PDF Button */}
+                <button
+                  onClick={() => handleGeneratePdf(selectedOrder)}
+                  disabled={pdfBusyOrderId === selectedOrder.id}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 disabled:opacity-60 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-all shadow-2xs hover:border-slate-300 cursor-pointer"
+                >
+                  <FileDown size={14} className="text-emerald-600" />
+                  <span>{pdfBusyOrderId === selectedOrder.id ? 'Generating…' : 'Generate PDF'}</span>
+                </button>
+
+                {/* Share PDF Button */}
+                <button
+                  onClick={() => handleSharePdf(selectedOrder)}
+                  disabled={pdfBusyOrderId === selectedOrder.id}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer"
+                >
+                  <Share2 size={14} />
+                  <span>{pdfBusyOrderId === selectedOrder.id ? 'Preparing…' : 'Share PDF'}</span>
+                </button>
+
+                <button
+                  onClick={() => setDeletingOrder(selectedOrder)}
+                  className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -496,17 +722,15 @@ export function OrdersPage() {
             {[
               ['Order Name', 'name'],
               ['Customer', 'customerName'],
-              ['Designer', 'designerName'],
               ['Category', 'category'],
-              ['Budget', 'budget'],
               ['Due Date', 'due'],
               ['Progress', 'progress'],
             ].map(([label, key]) => (
               <label key={key} className="text-sm font-medium text-slate-700">
                 {label}
                 <input
-                  required
-                  value={String(editingOrder[key as keyof Order])}
+                  required={key !== 'due'}
+                  value={String(editingOrder[key as keyof Order] ?? '')}
                   onChange={(event) => setEditingOrder({ ...editingOrder, [key]: event.target.value })}
                   className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
                 />

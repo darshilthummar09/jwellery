@@ -149,18 +149,73 @@ const formatLastMessage = (text: string, attachments?: ChatAttachment[]) => {
   return attachments.length === 1 ? `Sent ${attachments[0].name}` : `Sent ${attachments.length} files`;
 };
 
+import { MOCK_USERS } from '../data/mock-users';
+import { User } from '../types/user.types';
+
 interface StoredChatState {
-  threads?: ChatThread[];
-  orders?: Order[];
-  /** @deprecated legacy key from before the Project → Order rename */
-  projects?: Order[];
-  notifications?: AppNotification[];
+  threads?: ChatThread[] | Record<string, ChatThread>;
+  orders?: Order[] | Record<string, Order>;
+  projects?: Order[] | Record<string, Order>;
+  users?: User[] | Record<string, User>;
+  notifications?: AppNotification[] | Record<string, AppNotification>;
   notifCounter?: number;
 }
 
-/** Reads the orders array from a stored state blob, falling back to the pre-rename `projects` key. */
+/** Parses an orders collection from Firebase or LocalStorage whether it's an Array or Object map */
+function parseOrdersFromState(raw: any): Order[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === 'object') {
+    return Object.values(raw).filter(Boolean) as Order[];
+  }
+  return [];
+}
+
+/** Parses a users collection from Firebase or LocalStorage whether it's an Array or Object map */
+function parseUsersFromState(raw: any): User[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === 'object') {
+    return Object.values(raw).filter(Boolean) as User[];
+  }
+  return [];
+}
+
+/** Parses a threads collection from Firebase or LocalStorage whether it's an Array or Object map */
+function parseThreadsFromState(raw: any): ChatThread[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter(Boolean).map((t: any) => ({
+      ...t,
+      messages: Array.isArray(t.messages)
+        ? t.messages.filter(Boolean)
+        : typeof t.messages === 'object'
+          ? Object.values(t.messages).filter(Boolean)
+          : [],
+    }));
+  }
+  if (typeof raw === 'object') {
+    return Object.values(raw).filter(Boolean).map((t: any) => ({
+      ...t,
+      messages: Array.isArray(t.messages)
+        ? t.messages.filter(Boolean)
+        : typeof t.messages === 'object'
+          ? Object.values(t.messages).filter(Boolean)
+          : [],
+    })) as ChatThread[];
+  }
+  return [];
+}
+
+function parseNotificationsFromState(raw: any): AppNotification[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === 'object') return Object.values(raw).filter(Boolean) as AppNotification[];
+  return [];
+}
+
 function readOrders(state: StoredChatState): Order[] {
-  return state.orders ?? state.projects ?? INITIAL_ORDERS;
+  return parseOrdersFromState(state.orders ?? state.projects);
 }
 
 function loadStoredChatState(): StoredChatState | null {
@@ -194,29 +249,26 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 function removeDeletedSeedData(state: StoredChatState | null): StoredChatState | null {
   if (!state) return null;
-
   return state;
+}
+
+/** Strips undefined properties so Firebase Realtime Database set() never rejects */
+function sanitizeForFirebase<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data, (_, val) => (val === undefined ? null : val)));
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ChatNotificationProvider({ children }: { children: React.ReactNode }) {
   const storedState = removeDeletedSeedData(loadStoredChatState());
-  const [threads, setThreads] = useState<ChatThread[]>(storedState?.threads ?? INITIAL_THREADS);
+  const [threads, setThreads] = useState<ChatThread[]>(storedState ? parseThreadsFromState(storedState.threads) : INITIAL_THREADS);
   const [orders, setOrders] = useState<Order[]>(storedState ? readOrders(storedState) : INITIAL_ORDERS);
-  const [notifications, setNotifications] = useState<AppNotification[]>(storedState?.notifications ?? INITIAL_NOTIFICATIONS);
+  const [users, setUsers] = useState<User[]>(storedState?.users ? parseUsersFromState(storedState.users) : MOCK_USERS);
+  const [notifications, setNotifications] = useState<AppNotification[]>(storedState ? parseNotificationsFromState(storedState.notifications) : INITIAL_NOTIFICATIONS);
   const [notifCounter, setNotifCounter] = useState(storedState?.notifCounter ?? 9000);
-  const [remoteReady, setRemoteReady] = useState(!isFirebaseConfigured);
-  // True only once Firebase has actually confirmed the current remote value (or
-  // there's no remote to confirm). Distinct from remoteReady, which also flips
-  // true on a connection *timeout* -- without this guard, a slow/denied
-  // connection could let the persist effect below push this device's local
-  // snapshot to Firebase and clobber real remote data before ever seeing it.
-  const remoteHydratedRef = useRef(!isFirebaseConfigured);
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const lastSerializedStateRef = useRef('');
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const initialStateRef = useRef({ threads, orders, notifications, notifCounter });
 
   const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
     const items = Array.isArray(n) ? n : [n];
@@ -233,9 +285,6 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const nowTime = () =>
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Date.now() alone can collide when two messages are created in the same
-  // synchronous tick (e.g. ensureDesignerThread immediately followed by
-  // sendAdminMessage) -- jitter keeps ids unique for React keys / lookups.
   const newMessageId = () => Date.now() + Math.floor(Math.random() * 1000);
 
   const getThreadByCustomer = useCallback(
@@ -257,37 +306,43 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     return null;
   };
 
+  const applyChatState = useCallback((stored: StoredChatState) => {
+    const parsedOrders = parseOrdersFromState(stored.orders ?? stored.projects);
+    const parsedThreads = parseThreadsFromState(stored.threads);
+    const parsedUsers = stored.users ? parseUsersFromState(stored.users) : MOCK_USERS;
+    const parsedNotifs = parseNotificationsFromState(stored.notifications);
+
+    setThreads(parsedThreads);
+    setOrders(parsedOrders);
+    setUsers(parsedUsers);
+    setNotifications(parsedNotifs);
+    if (typeof stored.notifCounter === 'number') {
+      setNotifCounter(stored.notifCounter);
+    }
+
+    const clean = sanitizeForFirebase({
+      threads: parsedThreads,
+      orders: parsedOrders,
+      users: parsedUsers,
+      notifications: parsedNotifs,
+      notifCounter: stored.notifCounter ?? 9000,
+    });
+    const serialized = JSON.stringify(clean);
+    lastSerializedStateRef.current = serialized;
+    try {
+      window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const applyStoredState = useCallback((raw: string | null) => {
     const stored = parseStoredChatState(raw);
     if (!stored) return;
+    applyChatState(stored);
+  }, [applyChatState]);
 
-    const serialized = JSON.stringify(stored);
-    if (serialized === lastSerializedStateRef.current) return;
-
-    lastSerializedStateRef.current = serialized;
-    const sanitized = removeDeletedSeedData(stored);
-    if (!sanitized) return;
-
-    setThreads(sanitized.threads ?? INITIAL_THREADS);
-    setOrders(readOrders(sanitized));
-    setNotifications(sanitized.notifications ?? INITIAL_NOTIFICATIONS);
-    setNotifCounter(sanitized.notifCounter ?? 9000);
-  }, []);
-
-  const applyChatState = useCallback((stored: StoredChatState) => {
-    const sanitized = removeDeletedSeedData(stored);
-    if (!sanitized) return;
-
-    const serialized = JSON.stringify(sanitized);
-    if (serialized === lastSerializedStateRef.current) return;
-
-    lastSerializedStateRef.current = serialized;
-    setThreads(sanitized.threads ?? INITIAL_THREADS);
-    setOrders(readOrders(sanitized));
-    setNotifications(sanitized.notifications ?? INITIAL_NOTIFICATIONS);
-    setNotifCounter(sanitized.notifCounter ?? 9000);
-  }, []);
-
+  // ─── Firebase Realtime Database 3-Node Listener ───────────────────────────────
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === CHAT_STORAGE_KEY) {
@@ -307,81 +362,101 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       };
     }
 
-    let unsubscribeFirebase: (() => void) | undefined;
-    let fallbackTimer: NodeJS.Timeout | undefined;
+    const unsubs: Array<() => void> = [];
 
     if (firebaseDatabase) {
-      const chatStateRef = ref(firebaseDatabase, 'chatState');
+      // 1. Orders Node Listener (/orders)
+      const ordersRef = ref(firebaseDatabase, 'orders');
+      const unsubOrders = onValue(ordersRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          const parsed = parseOrdersFromState(val);
+          setOrders(parsed);
+        }
+      }, (err) => console.warn('Firebase RTDB orders sync:', err.message));
+      unsubs.push(unsubOrders);
 
-      // If Firebase takes more than 2.5 seconds to reply, fallback to local storage
-      fallbackTimer = setTimeout(() => {
-        console.warn('Firebase RTDB connection timeout. Falling back to local storage.');
-        setRemoteReady(true);
-      }, 2500);
-
-      unsubscribeFirebase = onValue(chatStateRef, (snapshot) => {
-        if (fallbackTimer) clearTimeout(fallbackTimer);
-        remoteHydratedRef.current = true;
-        const value = snapshot.val() as StoredChatState | null;
-        if (value) {
-          const sanitized = removeDeletedSeedData(value);
-          if (sanitized && JSON.stringify(sanitized) !== JSON.stringify(value)) {
-            try {
-              set(chatStateRef, JSON.parse(JSON.stringify(sanitized)));
-            } catch (e) {
-              console.error('Failed to update sanitized state in Firebase:', e);
-            }
-          }
-          applyChatState(sanitized ?? value);
+      // 2. Users Node Listener (/users)
+      const usersRef = ref(firebaseDatabase, 'users');
+      const unsubUsers = onValue(usersRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          const parsed = parseUsersFromState(val);
+          setUsers(parsed);
         } else {
+          // Initialize users in Firebase if not set
           try {
-            set(chatStateRef, JSON.parse(JSON.stringify(initialStateRef.current)));
-          } catch (e) {
-            console.error('Failed to initialize Firebase state:', e);
+            set(usersRef, sanitizeForFirebase(MOCK_USERS));
+          } catch {
+            // ignore
           }
         }
-        setRemoteReady(true);
-      });
+      }, (err) => console.warn('Firebase RTDB users sync:', err.message));
+      unsubs.push(unsubUsers);
+
+      // 3. Chats / Main State Listener (/chats & /chatState)
+      const chatStateRef = ref(firebaseDatabase, 'chatState');
+      const unsubChat = onValue(chatStateRef, (snapshot) => {
+        const value = snapshot.val() as StoredChatState | null;
+        if (value) {
+          applyChatState(value);
+        }
+      }, (err) => console.warn('Firebase RTDB chatState sync:', err.message));
+      unsubs.push(unsubChat);
     }
 
     return () => {
       window.removeEventListener('storage', handleStorage);
       channelRef.current?.close();
       channelRef.current = null;
-      unsubscribeFirebase?.();
-      if (fallbackTimer) clearTimeout(fallbackTimer);
+      unsubs.forEach((unsub) => unsub());
     };
   }, [applyChatState, applyStoredState]);
 
+  // ─── Sync changes to Firebase & localStorage ──────────────────────────────────
   useEffect(() => {
-    const serialized = JSON.stringify({ threads, orders, notifications, notifCounter });
+    const payload = sanitizeForFirebase({
+      threads,
+      orders,
+      users,
+      notifications,
+      notifCounter,
+    });
+    const serialized = JSON.stringify(payload);
     if (serialized === lastSerializedStateRef.current) return;
 
-    // Always update local storage and notify other tabs immediately
     lastSerializedStateRef.current = serialized;
+
+    // Update LocalStorage & BroadcastChannel immediately across tabs
     try {
       window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
     } catch (e) {
-      console.warn('Failed to save state to localStorage (likely quota exceeded):', e);
+      console.warn('LocalStorage save failed:', e);
     }
     channelRef.current?.postMessage({
       source: clientIdRef.current,
       state: serialized,
     });
 
-    // Write to Firebase only once we've actually confirmed the remote value at
-    // least once -- never on a bare connection-timeout fallback, which could
-    // otherwise push this device's (possibly empty/stale) local snapshot over
-    // real remote data it never got to see.
-    if (remoteReady && remoteHydratedRef.current && firebaseDatabase) {
+    // Write to dedicated Firebase Realtime Database nodes:
+    // /orders, /users, and /chatState
+    if (firebaseDatabase) {
       try {
-        const cleanState = JSON.parse(serialized);
-        set(ref(firebaseDatabase, 'chatState'), cleanState);
+        // Node 1: Orders (dedicated /orders node)
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(orders)).catch(() => {});
+
+        // Node 2: Users (dedicated /users node)
+        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(users)).catch(() => {});
+
+        // Node 3: Chat State & Threads (/chatState & /chats)
+        set(ref(firebaseDatabase, 'chatState'), payload).catch((err) => {
+          console.warn('Firebase RTDB write note (ensure Firebase Rules are set to read: true, write: true):', err.message || err);
+        });
       } catch (e) {
         console.error('Failed to save state to Firebase:', e);
       }
     }
-  }, [threads, orders, notifications, notifCounter, remoteReady]);
+  }, [threads, orders, users, notifications, notifCounter]);
 
   const ensureDesignerThread = useCallback((designerName: string, orderName?: string) => {
     const threadId = createDesignerThreadId(designerName);
@@ -466,8 +541,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       ];
       if (order.size)         lines.push(`📏 Size       : No. ${order.size}`);
       if (order.weight)       lines.push(`⚖️  Weight     : ${order.weight}`);
-      lines.push(`💰 Budget     : ${order.budget}`);
-      if (order.deliveryDate) lines.push(`📅 Placed On  : ${order.deliveryDate}`);
+      if (order.deliveryDate) lines.push(`📅 Target Date: ${order.deliveryDate}`);
       if (order.notes)        lines.push(`📝 Notes      : ${order.notes}`);
       if (orderAttachments.length > 0) lines.push(`📎 Files      : ${orderAttachments.length} file(s) attached`);
       lines.push(`──────────────────────────`);
@@ -542,7 +616,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           size: a.size,
           type: a.type
         })),
-        created: order.deliveryDate ?? new Date().toLocaleDateString(),
+        created: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         progress: '0%',
       };
 

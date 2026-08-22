@@ -18,7 +18,7 @@ import { SettingsPage } from '../pages/super-admin/SettingsPage';
 import { AdminDashboard } from '../pages/admin/AdminDashboard';
 import { OrdersPage } from '../pages/admin/OrdersPage';
 import { CustomersPage } from '../pages/admin/CustomersPage';
-import { DesignersPage } from '../pages/admin/DesignersPage';
+// import { DesignersPage } from '../pages/admin/DesignersPage';
 import { ChatsPage } from '../pages/admin/ChatsPage';
 
 // Customer Pages
@@ -26,13 +26,13 @@ import { CustomerDashboard } from '../pages/customer/CustomerDashboard';
 import { MyProductsPage } from '../pages/customer/MyProductsPage';
 import { GeneralChatPage } from '../pages/customer/GeneralChatPage';
 import { CustomerNotificationsPage } from '../pages/customer/NotificationsPage';
-import { AiStudioPage } from '../pages/customer/AiStudioPage';
+// import { AiStudioPage } from '../pages/customer/AiStudioPage';
 
-// Designer Pages
-import { DesignerDashboard } from '../pages/designer/DesignerDashboard';
-import { AssignedOrdersPage } from '../pages/designer/AssignedOrdersPage';
-import { DesignerChatPage } from '../pages/designer/DesignerChatPage';
-import { DesignerNotificationsPage } from '../pages/designer/NotificationsPage';
+// Designer Pages (Disabled / Commented)
+// import { DesignerDashboard } from '../pages/designer/DesignerDashboard';
+// import { AssignedOrdersPage } from '../pages/designer/AssignedOrdersPage';
+// import { DesignerChatPage } from '../pages/designer/DesignerChatPage';
+// import { DesignerNotificationsPage } from '../pages/designer/NotificationsPage';
 
 // Utility Pages
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
@@ -75,26 +75,26 @@ export function AppRouter() {
                 <Route path="/dashboard/admin" element={<AdminDashboard />} />
                 <Route path="/dashboard/admin/orders" element={<OrdersPage />} />
                 <Route path="/dashboard/admin/customers" element={<CustomersPage />} />
-                <Route path="/dashboard/admin/designers" element={<DesignersPage />} />
+                {/* <Route path="/dashboard/admin/designers" element={<DesignersPage />} /> */}
                 <Route path="/dashboard/admin/chats" element={<ChatsPage />} />
               </Route>
 
               {/* Customer */}
               <Route element={<RoleRoute allowedRoles={['customer']} />}>
                 <Route path="/dashboard/customer" element={<CustomerDashboard />} />
-                <Route path="/dashboard/customer/ai-studio" element={<AiStudioPage />} />
+                {/* <Route path="/dashboard/customer/ai-studio" element={<AiStudioPage />} /> */}
                 <Route path="/dashboard/customer/my-products" element={<MyProductsPage />} />
                 <Route path="/dashboard/customer/chat" element={<GeneralChatPage />} />
                 <Route path="/dashboard/customer/notifications" element={<CustomerNotificationsPage />} />
               </Route>
 
-              {/* Designer */}
-              <Route element={<RoleRoute allowedRoles={['designer']} />}>
+              {/* Designer (Disabled) */}
+              {/* <Route element={<RoleRoute allowedRoles={['designer']} />}>
                 <Route path="/dashboard/designer" element={<DesignerDashboard />} />
                 <Route path="/dashboard/designer/assigned-orders" element={<AssignedOrdersPage />} />
                 <Route path="/dashboard/designer/chat" element={<DesignerChatPage />} />
                 <Route path="/dashboard/designer/notifications" element={<DesignerNotificationsPage />} />
-              </Route>
+              </Route> */}
 
               {/* Generic /dashboard → redirect to role dashboard */}
               <Route path="/dashboard" element={<Navigate to="/" replace />} />

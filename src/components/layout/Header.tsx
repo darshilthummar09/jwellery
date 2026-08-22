@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useRole } from '../../hooks/useRole';
 import {
-  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Search
+  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Search, MessageCircle
 } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
 import { RoleBadge } from '../common/Badge';
@@ -271,22 +271,77 @@ function UserDropdown() {
   );
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+function QuickChatButton() {
+  const { role } = useRole();
+  const navigate = useNavigate();
+  const { getChatUnreadCount } = useChatNotification();
+
+  const chatRole = role === 'super-admin' ? 'admin' : (role as 'customer' | 'admin' | 'designer') ?? 'customer';
+  const unreadChatCount = getChatUnreadCount(chatRole);
+
+  const handleClick = () => {
+    if (role === 'customer') {
+      navigate('/dashboard/customer/chat');
+    } else {
+      navigate('/dashboard/admin/chats');
+    }
+  };
+
+  return (
+    <button
+      id="quick-chat-button"
+      onClick={handleClick}
+      className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 transition-all cursor-pointer"
+      title={role === 'customer' ? 'Support Chat' : 'Messages'}
+      aria-label={role === 'customer' ? 'Support Chat' : 'Messages'}
+    >
+      <MessageCircle size={18} />
+      {unreadChatCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 bg-emerald-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+          {unreadChatCount > 9 ? '9+' : unreadChatCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
+interface HeaderProps {
+  onMenuClick: () => void;
+  isCustomer?: boolean;
+}
+
+export function Header({ onMenuClick, isCustomer }: HeaderProps) {
+  const { role } = useRole();
+  const isCust = isCustomer || role === 'customer';
+
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-sm border-b border-slate-200 flex items-center px-4 sm:px-6 gap-4">
-      {/* Mobile menu toggle */}
-      <button
-        id="mobile-menu-toggle"
-        onClick={onMenuClick}
-        className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-        aria-label="Open menu"
-      >
-        <Menu size={20} />
-      </button>
+      {/* Brand logo for customer / Mobile toggle for admins */}
+      {isCust ? (
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.png"
+            alt="Dream Jewels"
+            className="h-8 w-auto object-contain select-none"
+          />
+          <span className="font-serif font-bold text-lg text-slate-900 tracking-wide hidden sm:inline-block">
+            Dream Jewels
+          </span>
+        </div>
+      ) : (
+        <button
+          id="mobile-menu-toggle"
+          onClick={onMenuClick}
+          className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu size={20} />
+        </button>
+      )}
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb (for admins) or spacer */}
       <div className="flex-1 min-w-0">
-        <Breadcrumb />
+        {!isCust && <Breadcrumb />}
       </div>
 
       {/* Search (desktop) */}
@@ -297,6 +352,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           ⌘K
         </kbd>
       </div>
+
+      {/* Quick support chat button */}
+      <QuickChatButton />
 
       {/* Notification bell */}
       <NotificationBell />

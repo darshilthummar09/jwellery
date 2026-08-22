@@ -136,7 +136,7 @@ export function UsersPage() {
               Role
               <select value={draftUser.role} onChange={(e) => setDraftUser({ ...draftUser, role: e.target.value as User['role'] })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100">
                 <option value="customer">Customer</option>
-                <option value="designer">Designer</option>
+                {/* <option value="designer">Designer</option> */}
                 <option value="admin">Admin</option>
                 <option value="super-admin">Super Admin</option>
               </select>
