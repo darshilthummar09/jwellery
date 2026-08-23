@@ -6,6 +6,7 @@ import {
   authLogout,
   authGetCurrentUser,
 } from '../services/auth.service';
+import { SESSION_KEY } from '../utils/session';
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -17,11 +18,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On mount, restore session (SessionStorage → Supabase later)
+  // On mount, restore persistent session & listen for cross-tab session changes
   useEffect(() => {
     const currentUser = authGetCurrentUser();
     setUser(currentUser);
     setIsLoading(false);
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === SESSION_KEY) {
+        const updatedUser = authGetCurrentUser();
+        setUser(updatedUser);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const login = useCallback(
