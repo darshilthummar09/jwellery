@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import {
   ShoppingBag, Clock, CheckCircle2, Star, MessageCircle,
   Plus, Search, Filter, X, Send, Download, HeadphonesIcon,
-  FileText, Image as ImageIcon, Package, CheckCircle, Gem, Calendar
+  FileText, Image as ImageIcon, Package, CheckCircle, Gem, Calendar, Paperclip
 } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -173,15 +173,17 @@ export function CustomerDashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedOrderContext, setSelectedOrderContext] = useState<{ id: string; name: string } | null>(null);
   const [chatInput, setChatInput] = useState('');
+  const [pendingChatAttachments, setPendingChatAttachments] = useState<ChatAttachment[]>([]);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Support thread
-  const supportThread = threads.find(
-    (t) =>
-      t.participantRole !== 'designer' &&
-      (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())
-  );
+  // Active thread (order-wise or general)
+  const activeThread = selectedOrderContext
+    ? (threads.find((t) => t.orderId === selectedOrderContext.id || t.id === `order-${selectedOrderContext.id}`) ??
+       threads.find((t) => t.customerId === customerId))
+    : (threads.find((t) => t.id === `customer-${customerId}`) ??
+       threads.find((t) => t.participantRole !== 'designer' && (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())));
 
   const unreadChatCount = getChatUnreadCount('customer');
 
@@ -207,16 +209,16 @@ export function CustomerDashboard() {
 
   // Mark read when chat open
   useEffect(() => {
-    if (isChatOpen && supportThread) {
-      markThreadRead(supportThread.id, 'customer');
+    if (isChatOpen && activeThread) {
+      markThreadRead(activeThread.id, 'customer');
     }
-  }, [isChatOpen, supportThread?.id, supportThread?.messages.length, markThreadRead]);
+  }, [isChatOpen, activeThread?.id, activeThread?.messages.length, markThreadRead]);
 
   useEffect(() => {
     if (isChatOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [isChatOpen, supportThread?.messages.length]);
+  }, [isChatOpen, activeThread?.messages.length]);
 
   const handleOpenChatForOrder = (order: Order) => {
     setSelectedOrderContext({ id: order.id, name: order.name });
@@ -228,22 +230,41 @@ export function CustomerDashboard() {
     setIsChatOpen(true);
   };
 
+  const handleChatFilesSelected = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const attachments = await Promise.all(
+      Array.from(files).map(async (file, index) => {
+        const isImage = file.type.startsWith('image/');
+        const isVideo = file.type.startsWith('video/');
+        const { url, size } = isImage
+          ? await compressImageFile(file).then((r) => ({ url: r.dataUrl, size: r.size }))
+          : { url: await readFileAsDataUrl(file), size: file.size };
+        return {
+          id: Date.now() + index,
+          name: file.name,
+          size,
+          type: isImage ? 'image/jpeg' : file.type || 'application/octet-stream',
+          url,
+          kind: (isImage ? 'image' : isVideo ? 'video' : 'file') as ChatAttachment['kind'],
+        };
+      })
+    );
+    setPendingChatAttachments((prev) => [...prev, ...attachments]);
+    if (chatFileInputRef.current) chatFileInputRef.current.value = '';
+  };
+
+  const removePendingChatAttachment = (id: number) => {
+    setPendingChatAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
   const handleSendChatMessage = () => {
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() && pendingChatAttachments.length === 0) return;
 
-    if (!supportThread) {
-      const generalInquiry: OrderDetails = {
-        name: selectedOrderContext ? `Inquiry: ${selectedOrderContext.name}` : 'General Inquiry',
-        category: 'General',
-        metal: '-',
-        karat: '-',
-        budget: 'Custom Order',
-      };
-      createThreadForOrder(customerId, customerName, generalInquiry);
-    }
+    const targetThreadId = activeThread?.id ?? (selectedOrderContext ? `order-${selectedOrderContext.id}` : `customer-${customerId}`);
 
-    sendCustomerMessage(customerId, customerName, chatInput.trim(), supportThread?.id);
+    sendCustomerMessage(customerId, customerName, chatInput.trim(), targetThreadId, pendingChatAttachments);
     setChatInput('');
+    setPendingChatAttachments([]);
   };
 
   // File handling for order modal
@@ -347,7 +368,7 @@ export function CustomerDashboard() {
     }
   };
 
-  const messages = supportThread?.messages ?? [];
+  const messages = activeThread?.messages ?? [];
 
   return (
     <PageContainer>
@@ -662,16 +683,48 @@ export function CustomerDashboard() {
                   const isOrderCard = msg.text.startsWith('ORDER DETAILS') || msg.text.includes('ORDER DETAILS') || msg.text.startsWith('📋 ORDER DETAILS');
 
                   if (isOrderCard) {
+                    const matchingOrder = orders.find(
+                      (o) =>
+                        (selectedOrderContext && o.id === selectedOrderContext.id) ||
+                        (activeThread?.orderId && o.id === activeThread.orderId)
+                    );
+                    const rows = msg.text.split('\n');
                     return (
                       <div key={msg.id} className="flex items-start gap-2.5">
                         <Avatar user={{ name: 'Dream Jewels Support' }} size="xs" />
-                        <div className="max-w-[85%] flex flex-col gap-1">
-                          <div className="rounded-2xl rounded-bl-sm overflow-hidden border border-slate-200 shadow-sm bg-white">
-                            <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2">
-                              <span className="text-white font-bold text-xs tracking-wide">Order Summary</span>
+                        <div className="max-w-[90%] sm:max-w-[85%] flex flex-col gap-1">
+                          <div className="rounded-2xl rounded-bl-sm overflow-hidden border border-emerald-200 shadow-sm bg-white">
+                            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 flex items-center justify-between">
+                              <span className="text-white font-bold text-xs tracking-wide flex items-center gap-1.5">
+                                <Gem size={13} /> Order Specifications
+                              </span>
+                              {matchingOrder && (
+                                <span className="text-[10px] text-white/80 font-mono font-bold">
+                                  #{matchingOrder.id}
+                                </span>
+                              )}
                             </div>
+
+                            {/* Order Images Gallery */}
+                            {matchingOrder?.images && matchingOrder.images.length > 0 && (
+                              <div className="p-3 pb-0">
+                                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                                  {matchingOrder.images.filter(img => img.type?.startsWith('image/')).map((img) => (
+                                    <button
+                                      key={img.id}
+                                      type="button"
+                                      onClick={() => setLightboxImage({ url: img.url, name: img.name })}
+                                      className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 hover:opacity-90 transition-all cursor-pointer shadow-2xs"
+                                    >
+                                      <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             <div className="px-4 py-3 space-y-1.5">
-                              {msg.text.split('\n').slice(2).map((row, i) => {
+                              {rows.slice(2).map((row, i) => {
                                 if (row.startsWith('--') || row.startsWith('──')) return <div key={i} className="border-t border-slate-100 my-1" />;
                                 const colonIdx = row.indexOf(':');
                                 if (colonIdx === -1) return null;
@@ -702,7 +755,7 @@ export function CustomerDashboard() {
                         <div className="flex items-center gap-2 group">
                           {isMe && (
                             <button
-                              onClick={() => supportThread && deleteMessage(supportThread.id, msg.id)}
+                              onClick={() => activeThread && deleteMessage(activeThread.id, msg.id)}
                               className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded text-red-500 hover:text-red-700 text-xs transition-opacity cursor-pointer order-last"
                               title="Delete message"
                             >
@@ -724,21 +777,63 @@ export function CustomerDashboard() {
             </div>
 
             {/* Input Bar */}
-            <div className="px-5 py-3.5 border-t border-slate-100 flex items-center gap-2.5 bg-white">
-              <Avatar user={user} size="xs" />
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                placeholder={selectedOrderContext ? `Ask about ${selectedOrderContext.name}...` : "Type a message..."}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
-              />
-              <button
-                onClick={handleSendChatMessage}
-                className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-xs active:scale-95 cursor-pointer flex-shrink-0"
-              >
-                <Send size={15} />
-              </button>
+            <div className="p-3 sm:p-4 border-t border-slate-100 bg-white flex flex-col gap-2 flex-shrink-0">
+              {pendingChatAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {pendingChatAttachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 max-w-[200px]"
+                    >
+                      <FileText size={13} className="text-slate-500 flex-shrink-0" />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-slate-700 truncate">{attachment.name}</span>
+                        <span className="block text-[9px] text-slate-400">{formatFileSize(attachment.size)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removePendingChatAttachment(attachment.id)}
+                        className="ml-auto text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  ref={chatFileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => handleChatFilesSelected(event.target.files)}
+                />
+                <button
+                  type="button"
+                  onClick={() => chatFileInputRef.current?.click()}
+                  className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
+                  aria-label="Attach files"
+                  title="Attach image or document"
+                >
+                  <Paperclip size={16} />
+                </button>
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendChatMessage()}
+                  placeholder={selectedOrderContext ? `Ask about ${selectedOrderContext.name}...` : "Type a message..."}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
+                />
+                <button
+                  onClick={handleSendChatMessage}
+                  disabled={!chatInput.trim() && pendingChatAttachments.length === 0}
+                  className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white flex items-center justify-center transition-colors shadow-xs active:scale-95 cursor-pointer flex-shrink-0"
+                >
+                  <Send size={15} />
+                </button>
+              </div>
             </div>
           </div>
         </div>

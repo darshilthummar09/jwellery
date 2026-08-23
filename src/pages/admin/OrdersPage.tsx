@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Check, Clock, Plus, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar } from 'lucide-react';
+import { Check, Clock, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { DetailCard } from '../../components/common/DetailCard';
@@ -43,24 +43,6 @@ function OrderThumb({ order, size = 'sm' }: { order: Order; size?: 'sm' | 'md' }
     </div>
   );
 }
-
-const emptyOrder = (nextId: string): Order => ({
-  id: nextId,
-  name: '',
-  customerId: `manual-${Date.now()}`,
-  customerName: '',
-  designerName: '',
-  status: 'Pending Approval',
-  due: '',
-  budget: '',
-  priority: 'Medium',
-  category: 'Rings',
-  metal: METAL_OPTIONS[0],
-  karat: KARAT_OPTIONS[2],
-  progress: '0%',
-  created: new Date().toLocaleDateString(),
-  notes: '',
-});
 
 export function OrdersPage() {
   const navigate = useNavigate();
@@ -142,11 +124,6 @@ export function OrdersPage() {
     setClientFilter(null);
   };
 
-  const openNewOrderModal = () => {
-    const nextId = `ORD-${String(orders.length + 1).padStart(3, '0')}`;
-    setEditingOrder(emptyOrder(nextId));
-  };
-
   const saveOrder = (event: FormEvent) => {
     event.preventDefault();
     if (!editingOrder) return;
@@ -158,7 +135,7 @@ export function OrdersPage() {
 
   const handleApproveOrder = (order: Order) => {
     approveOrder(order.id);
-    setSelectedOrder({ ...order, status: 'Approved' });
+    setSelectedOrder((prev) => (prev && prev.id === order.id ? { ...prev, status: 'Approved' } : prev));
   };
 
   const handleRejectOrder = (event: FormEvent) => {
@@ -166,7 +143,11 @@ export function OrdersPage() {
     if (!rejectingOrder) return;
 
     rejectOrder(rejectingOrder.id, rejectionReason);
-    setSelectedOrder(null);
+    setSelectedOrder((prev) =>
+      prev && prev.id === rejectingOrder.id
+        ? { ...prev, status: 'Rejected', rejectionReason: rejectionReason.trim() || undefined }
+        : prev
+    );
     setRejectingOrder(null);
     setRejectionReason('');
   };
@@ -239,28 +220,14 @@ export function OrdersPage() {
     <PageContainer>
       <div className="flex items-center justify-between gap-3 mb-3.5 sm:mb-8">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Orders</h1>
-          <p className="hidden sm:block text-sm text-slate-500 mt-0.5">Manage all jewellery design orders.</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            {clientFilter ? `${clientFilter.name} Orders` : 'Orders'}
+          </h1>
+          <p className="hidden sm:block text-sm text-slate-500 mt-0.5">
+            {clientFilter ? `Manage and track jewellery design orders for ${clientFilter.name}.` : 'Manage all jewellery design orders.'}
+          </p>
         </div>
-        <button
-          onClick={openNewOrderModal}
-          className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-xs transition-all active:scale-[0.98] cursor-pointer flex-shrink-0"
-        >
-          <Plus size={15} />
-          <span>New Order</span>
-        </button>
       </div>
-
-      {clientFilter && (
-        <div className="mb-3 flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-            Filtered by client: {clientFilter.name}
-            <button onClick={() => setClientFilter(null)} aria-label="Clear client filter" className="hover:text-emerald-900 ml-0.5">
-              <X size={12} />
-            </button>
-          </span>
-        </div>
-      )}
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         <div className="px-3.5 sm:px-6 py-2.5 sm:py-4 border-b border-slate-100 flex flex-col gap-2 sm:gap-3">
@@ -335,7 +302,7 @@ export function OrdersPage() {
         </div>
 
         {filteredOrders.length === 0 ? (
-          <EmptyState title="No orders found" description="Change the filters or create a new order." />
+          <EmptyState title="No orders found" description="Try adjusting your filters to find orders." />
         ) : (
           <>
             {/* Desktop / tablet table */}
@@ -687,7 +654,7 @@ export function OrdersPage() {
       )}
 
       {editingOrder && (
-        <Modal title={orders.some((order) => order.id === editingOrder.id) ? 'Edit Order' : 'New Order'} onClose={() => setEditingOrder(null)}>
+        <Modal title="Edit Order" onClose={() => setEditingOrder(null)}>
           <form onSubmit={saveOrder} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               ['Order Name', 'name'],

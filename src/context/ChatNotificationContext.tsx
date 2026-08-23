@@ -33,6 +33,8 @@ export interface ChatMessage {
 
 export interface ChatThread {
   id: string;
+  orderId?: string;
+  orderName?: string;
   customerName: string;
   customerId: string;
   participantRole?: 'customer' | 'designer';
@@ -110,7 +112,13 @@ interface ChatNotificationContextValue {
   threads: ChatThread[];
   orders: Order[];
   notifications: AppNotification[];
-  sendCustomerMessage: (customerId: string, customerName: string, text: string, optionalThreadId?: string) => void;
+  sendCustomerMessage: (
+    customerId: string,
+    customerName: string,
+    text: string,
+    optionalThreadId?: string,
+    attachments?: ChatAttachment[]
+  ) => void;
   sendDesignerMessage: (threadId: string, designerName: string, text: string) => void;
   sendAdminMessage: (threadId: string, text: string, attachments?: ChatAttachment[]) => void;
   markThreadRead: (threadId: string, as: 'admin' | 'customer' | 'designer') => void;
@@ -365,7 +373,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     const unsubs: Array<() => void> = [];
 
     if (firebaseDatabase) {
-      // 1. Orders Node Listener (/orders)
+      // 1. Orders Node Listener (/orders) - Single source of truth for orders
       const ordersRef = ref(firebaseDatabase, 'orders');
       const unsubOrders = onValue(ordersRef, (snapshot) => {
         const val = snapshot.val();
@@ -376,7 +384,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       }, (err) => console.warn('Firebase RTDB orders sync:', err.message));
       unsubs.push(unsubOrders);
 
-      // 2. Users Node Listener (/users)
+      // 2. Users Node Listener (/users) - Single source of truth for users
       const usersRef = ref(firebaseDatabase, 'users');
       const unsubUsers = onValue(usersRef, (snapshot) => {
         const val = snapshot.val();
@@ -394,12 +402,19 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       }, (err) => console.warn('Firebase RTDB users sync:', err.message));
       unsubs.push(unsubUsers);
 
-      // 3. Chats / Main State Listener (/chats & /chatState)
+      // 3. Chats / Notifications Listener (/chatState) - Sync threads & notifications only
+      // Do NOT overwrite orders or users from /chatState to prevent race conditions with dedicated /orders node
       const chatStateRef = ref(firebaseDatabase, 'chatState');
       const unsubChat = onValue(chatStateRef, (snapshot) => {
         const value = snapshot.val() as StoredChatState | null;
         if (value) {
-          applyChatState(value);
+          const parsedThreads = parseThreadsFromState(value.threads);
+          const parsedNotifs = parseNotificationsFromState(value.notifications);
+          setThreads(parsedThreads);
+          setNotifications(parsedNotifs);
+          if (typeof value.notifCounter === 'number') {
+            setNotifCounter(value.notifCounter);
+          }
         }
       }, (err) => console.warn('Firebase RTDB chatState sync:', err.message));
       unsubs.push(unsubChat);
@@ -411,7 +426,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       channelRef.current = null;
       unsubs.forEach((unsub) => unsub());
     };
-  }, [applyChatState, applyStoredState]);
+  }, [applyStoredState]);
 
   // ─── Sync changes to Firebase & localStorage ──────────────────────────────────
   useEffect(() => {
@@ -558,28 +573,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       };
 
       setThreads((prev) => {
-        const existing = prev.find(
-          (t) =>
-            t.participantRole !== 'designer' &&
-            (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())
-        );
-        if (existing) {
-          return prev.map((t) =>
-            t.id === existing.id
-              ? {
-                  ...t,
-                  customerId,
-                  messages: [...t.messages, greetMsg, detailMsg],
-                  unread: t.unread + 1,        // admin sees new messages
-                  customerUnread: t.customerUnread + 1,
-                  lastMessage: `New order: ${orderName}`,
-                  lastTime: 'Just now',
-                }
-              : t
-          );
-        }
+        const threadId = `order-${orderId}`;
         const newThread: ChatThread = {
-          id: `customer-${customerId}`,
+          id: threadId,
+          orderId,
+          orderName,
           customerName,
           customerId,
           participantRole: 'customer',
@@ -589,7 +587,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           lastMessage: `New order: ${orderName}`,
           lastTime: 'Just now',
         };
-        return [newThread, ...prev];
+        const updated = [newThread, ...prev.filter((t) => t.id !== threadId)];
+        if (firebaseDatabase) {
+          set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
+        }
+        return updated;
       });
 
       const newOrder: Order = {
@@ -620,7 +622,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         progress: '0%',
       };
 
-      setOrders((prev) => [newOrder, ...prev.filter((order) => order.id !== orderId)]);
+      setOrders((prev) => {
+        const updated = [newOrder, ...prev.filter((order) => order.id !== orderId)];
+        if (firebaseDatabase) {
+          set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
+        }
+        return updated;
+      });
 
       addNotification([
         {
@@ -647,119 +655,153 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   );
 
   const upsertOrder = useCallback((order: Order) => {
-    const existing = orders.find((item) => item.id === order.id);
-
     setOrders((current) => {
+      const existing = current.find((item) => item.id === order.id);
       const exists = current.some((item) => item.id === order.id);
-      return exists
+      const updated = exists
         ? current.map((item) => (item.id === order.id ? order : item))
         : [order, ...current];
-    });
 
-    if (existing) {
-      const statusChanged = existing.status !== order.status;
-      const progressChanged = existing.progress !== order.progress;
-
-      if (statusChanged || progressChanged) {
-        const statusText = statusChanged ? `status to ${order.status}` : '';
-        const progressText = progressChanged ? `progress to ${order.progress}` : '';
-        const andText = statusChanged && progressChanged ? ' and ' : '';
-        const changeDesc = `${statusText}${andText}${progressText}`;
-
-        addNotification([
-          {
-            role: 'customer',
-            title: `Order Update: ${order.name}`,
-            body: `Your order has been updated: ${changeDesc}.`,
-            time: 'Just now',
-            read: false,
-            type: 'order',
-            orderId: order.id,
-          },
-          {
-            role: 'admin',
-            title: `Order Update: ${order.name}`,
-            body: `Designer ${order.designerName} updated ${changeDesc}.`,
-            time: 'Just now',
-            read: false,
-            type: 'order',
-            orderId: order.id,
-          }
-        ]);
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
       }
-    }
-  }, [orders, addNotification]);
+
+      if (existing) {
+        const statusChanged = existing.status !== order.status;
+        const progressChanged = existing.progress !== order.progress;
+
+        if (statusChanged || progressChanged) {
+          const statusText = statusChanged ? `status to ${order.status}` : '';
+          const progressText = progressChanged ? `progress to ${order.progress}` : '';
+          const andText = statusChanged && progressChanged ? ' and ' : '';
+          const changeDesc = `${statusText}${andText}${progressText}`;
+
+          addNotification([
+            {
+              role: 'customer',
+              title: `Order Update: ${order.name}`,
+              body: `Your order has been updated: ${changeDesc}.`,
+              time: 'Just now',
+              read: false,
+              type: 'order',
+              orderId: order.id,
+            },
+            {
+              role: 'admin',
+              title: `Order Update: ${order.name}`,
+              body: `Designer ${order.designerName} updated ${changeDesc}.`,
+              time: 'Just now',
+              read: false,
+              type: 'order',
+              orderId: order.id,
+            }
+          ]);
+        }
+      }
+
+      return updated;
+    });
+  }, [addNotification]);
 
   // Approval only flips the status. It does NOT message or push data to the
   // designer -- that only happens when the admin explicitly generates and
   // sends a PDF brief (see OrdersPage's Generate/Send PDF actions).
   const approveOrder = useCallback((orderId: string) => {
-    const order = orders.find((item) => item.id === orderId);
-    if (!order) return;
+    setOrders((current) => {
+      const order = current.find((item) => item.id === orderId);
+      if (!order) return current;
 
-    setOrders((current) =>
-      current.map((item) => (item.id === orderId ? { ...item, status: 'Approved' as const } : item))
-    );
+      const updated = current.map((item) =>
+        item.id === orderId ? { ...item, status: 'Approved' as const } : item
+      );
 
-    addNotification({
-      role: 'customer',
-      title: `Order approved: ${order.name}`,
-      body: 'Your custom order has been approved and moved into design.',
-      time: 'Just now',
-      read: false,
-      type: 'order',
-      orderId: order.id,
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
+      }
+
+      addNotification({
+        role: 'customer',
+        title: `Order approved: ${order.name}`,
+        body: 'Your custom order has been approved and moved into design.',
+        time: 'Just now',
+        read: false,
+        type: 'order',
+        orderId: order.id,
+      });
+
+      return updated;
     });
-  }, [orders, addNotification]);
+  }, [addNotification]);
 
   const deleteOrder = useCallback((orderId: string) => {
-    setOrders((current) => current.filter((item) => item.id !== orderId));
+    setOrders((current) => {
+      const updated = current.filter((item) => item.id !== orderId);
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
+      }
+      return updated;
+    });
   }, []);
 
   const rejectOrder = useCallback((orderId: string, reason?: string) => {
-    const order = orders.find((item) => item.id === orderId);
-    if (!order) return;
+    setOrders((current) => {
+      const order = current.find((item) => item.id === orderId);
+      if (!order) return current;
 
-    const rejectedOrder: Order = {
-      ...order,
-      status: 'Rejected',
-      rejectionReason: reason?.trim() || undefined,
-    };
+      const rejectedOrder: Order = {
+        ...order,
+        status: 'Rejected',
+        rejectionReason: reason?.trim() || undefined,
+      };
 
-    setOrders((current) =>
-      current.map((item) => (item.id === orderId ? rejectedOrder : item))
-    );
+      const updated = current.map((item) =>
+        item.id === orderId ? rejectedOrder : item
+      );
 
-    addNotification({
-      role: 'customer',
-      title: `Order rejected: ${rejectedOrder.name}`,
-      body: rejectedOrder.rejectionReason
-        ? `Reason: ${rejectedOrder.rejectionReason}`
-        : 'Your custom order could not be approved at this time.',
-      time: 'Just now',
-      read: false,
-      type: 'order',
-      orderId: rejectedOrder.id,
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
+      }
+
+      addNotification({
+        role: 'customer',
+        title: `Order rejected: ${rejectedOrder.name}`,
+        body: rejectedOrder.rejectionReason
+          ? `Reason: ${rejectedOrder.rejectionReason}`
+          : 'Your custom order could not be approved at this time.',
+        time: 'Just now',
+        read: false,
+        type: 'order',
+        orderId: rejectedOrder.id,
+      });
+
+      return updated;
     });
-  }, [orders, addNotification]);
+  }, [addNotification]);
 
   const sendCustomerMessage = useCallback(
-    (customerId: string, customerName: string, text: string, optionalThreadId?: string) => {
+    (
+      customerId: string,
+      customerName: string,
+      text: string,
+      optionalThreadId?: string,
+      attachments?: ChatAttachment[]
+    ) => {
       const msg: ChatMessage = {
         id: newMessageId(),
         from: 'customer',
         senderName: customerName,
         text,
         time: nowTime(),
+        attachments: attachments && attachments.length > 0 ? attachments : undefined,
         seenBy: [],
       };
       setThreads((prev) => {
-        const existing = prev.find(
-          (t) => optionalThreadId ? t.id === optionalThreadId : (
-            t.participantRole !== 'designer' &&
-            (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())
-          )
-        );
+        const targetThreadId = optionalThreadId || `customer-${customerId}`;
+        const existing = prev.find((t) => t.id === targetThreadId || (
+          !optionalThreadId && t.participantRole !== 'designer' &&
+          (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())
+        ));
+
         if (existing) {
           return prev.map((t) =>
             t.id === existing.id
@@ -767,8 +809,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
               : t
           );
         }
+
         const newThread: ChatThread = {
-          id: `customer-${customerId}`,
+          id: targetThreadId,
           customerName,
           customerId,
           participantRole: 'customer',
@@ -788,7 +831,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         time: 'Just now',
         read: false,
         type: 'chat',
-        threadId: `customer-${customerId}`,
+        threadId: optionalThreadId || `customer-${customerId}`,
       });
     },
     [addNotification]

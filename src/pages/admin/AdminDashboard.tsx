@@ -1,4 +1,4 @@
-import { Briefcase, Users, MessageSquare, TrendingUp, ChevronRight } from 'lucide-react';
+import { Briefcase, Users, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -49,15 +49,12 @@ function buildClientSummaries(orders: Order[]): ClientSummary[] {
 export function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { orders, threads } = useChatNotification();
+  const { orders, getChatUnreadCount } = useChatNotification();
 
   const activeOrders = orders.filter(o => o.status !== 'Completed' && o.status !== 'Rejected');
-
-  // Calculate open chats (threads with unread admin messages)
-  const openChatsCount = threads.filter(t => t.unread > 0).length;
+  const unreadMessagesCount = getChatUnreadCount('admin');
 
   const totalCustomers = MOCK_USERS.filter(u => u.role === 'customer').length;
-  // const totalDesigners = MOCK_USERS.filter(u => u.role === 'designer').length;
 
   const clients = buildClientSummaries(orders).slice(0, 6);
 
@@ -73,11 +70,36 @@ export function AdminDashboard() {
         className="mb-6 sm:mb-8"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-6 sm:mb-8">
-        <StatCard title="Active Orders" value={activeOrders.length.toString()} icon={Briefcase}     color="emerald" onClick={() => navigate('/dashboard/admin/orders')} />
+      {unreadMessagesCount > 0 && (
+        <div
+          onClick={() => navigate('/dashboard/admin/chats')}
+          className="mb-6 p-4 bg-gradient-to-r from-emerald-50 via-teal-50/60 to-emerald-50/40 border border-emerald-200 rounded-2xl flex items-center justify-between gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-xs transition-all active:scale-[0.99] group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3 flex-shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <div>
+              <p className="text-sm font-bold text-emerald-950">
+                {unreadMessagesCount === 1 ? 'You have one new message' : `You have ${unreadMessagesCount} new messages`}
+              </p>
+              <p className="text-xs text-emerald-700/80 mt-0.5">
+                {unreadMessagesCount === 1
+                  ? 'A customer or designer is waiting for your reply.'
+                  : `${unreadMessagesCount} unread messages are waiting for your review.`}
+              </p>
+            </div>
+          </div>
+          <button className="text-xs font-bold text-emerald-700 bg-white px-3.5 py-2 rounded-xl border border-emerald-200 shadow-2xs group-hover:bg-emerald-600 group-hover:text-white transition-all whitespace-nowrap cursor-pointer">
+            View message{unreadMessagesCount > 1 ? 's' : ''} →
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 mb-6 sm:mb-8">
+        <StatCard title="Active Orders" value={activeOrders.length.toString()} icon={Briefcase} color="emerald" onClick={() => navigate('/dashboard/admin/orders')} />
         <StatCard title="Customers"     value={totalCustomers.toString()} icon={Users}         color="blue" onClick={() => navigate('/dashboard/admin/customers')} />
-        {/* <StatCard title="Designers"     value={totalDesigners.toString()} icon={TrendingUp}    color="purple" onClick={() => navigate('/dashboard/admin/designers')} /> */}
-        <StatCard title="Open Chats"    value={openChatsCount.toString()} icon={MessageSquare} color="orange" onClick={() => navigate('/dashboard/admin/chats')} />
       </div>
 
       {/* Clients */}

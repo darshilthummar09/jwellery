@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { Eye, EyeOff, Gem, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLE_DASHBOARD_PATH } from '../../constants/navigation';
 import { UserRole } from '../../types/role.types';
-import { MOCK_USERS } from '../../data/mock-users';
 
 function getSafePostLoginPath(role: UserRole, attemptedPath?: string): string {
   const roleDashboardPath = ROLE_DASHBOARD_PATH[role];
@@ -55,12 +54,6 @@ export function LoginPage() {
     }
   };
 
-  const fillCredentials = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setError('');
-  };
-
   return (
     <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -93,9 +86,12 @@ export function LoginPage() {
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
+                placeholder="e.g. admin or customer1"
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-base sm:text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Test username: <span className="font-mono text-slate-600 font-semibold">admin</span> or <span className="font-mono text-slate-600 font-semibold">customer1</span>
+              </p>
             </div>
 
             {/* Password */}
@@ -110,7 +106,7 @@ export function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Enter your password (123456)"
                   className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-base sm:text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
                 />
                 <button
@@ -122,6 +118,9 @@ export function LoginPage() {
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Test password: <span className="font-mono text-slate-600 font-semibold">123456</span>
+              </p>
             </div>
 
             {/* Error message */}
@@ -137,7 +136,7 @@ export function LoginPage() {
               id="login-submit"
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-semibold text-sm rounded-xl transition-all duration-200 shadow-lg shadow-emerald-200 hover:shadow-emerald-300 active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-semibold text-sm rounded-xl transition-all duration-200 shadow-lg shadow-emerald-200 hover:shadow-emerald-300 active:scale-[0.98] cursor-pointer"
             >
               {isLoading ? (
                 <>
@@ -149,27 +148,6 @@ export function LoginPage() {
               )}
             </button>
           </form>
-        </div>
-
-        {/* Demo Credentials Quick-Fill */}
-        <div className="mt-6 bg-white/80 backdrop-blur rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-            Demo Accounts — Click to fill
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {MOCK_USERS.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => fillCredentials(u.username, u.password)}
-                className="flex flex-col items-start p-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 text-left transition-all group"
-              >
-                <span className="text-xs font-semibold text-slate-700 group-hover:text-emerald-700">
-                  {u.name}
-                </span>
-                <span className="text-[10px] text-slate-400 mt-0.5">{u.username} / {u.password}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">

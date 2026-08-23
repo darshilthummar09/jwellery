@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useRole } from '../../hooks/useRole';
 import {
-  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Search, MessageCircle
+  Menu, Bell, ChevronDown, LogOut, User as UserIcon, Search
 } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
 import { RoleBadge } from '../common/Badge';
@@ -271,40 +271,6 @@ function UserDropdown() {
   );
 }
 
-function QuickChatButton() {
-  const { role } = useRole();
-  const navigate = useNavigate();
-  const { getChatUnreadCount } = useChatNotification();
-
-  const chatRole = role === 'super-admin' ? 'admin' : (role as 'customer' | 'admin' | 'designer') ?? 'customer';
-  const unreadChatCount = getChatUnreadCount(chatRole);
-
-  const handleClick = () => {
-    if (role === 'customer') {
-      navigate('/dashboard/customer/chat');
-    } else {
-      navigate('/dashboard/admin/chats');
-    }
-  };
-
-  return (
-    <button
-      id="quick-chat-button"
-      onClick={handleClick}
-      className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 transition-all cursor-pointer"
-      title={role === 'customer' ? 'Support Chat' : 'Messages'}
-      aria-label={role === 'customer' ? 'Support Chat' : 'Messages'}
-    >
-      <MessageCircle size={18} />
-      {unreadChatCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 bg-emerald-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-white animate-pulse">
-          {unreadChatCount > 9 ? '9+' : unreadChatCount}
-        </span>
-      )}
-    </button>
-  );
-}
-
 interface HeaderProps {
   onMenuClick: () => void;
   isCustomer?: boolean;
@@ -352,9 +318,6 @@ export function Header({ onMenuClick, isCustomer }: HeaderProps) {
           ⌘K
         </kbd>
       </div>
-
-      {/* Quick support chat button */}
-      <QuickChatButton />
 
       {/* Notification bell */}
       <NotificationBell />
