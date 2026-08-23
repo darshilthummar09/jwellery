@@ -167,8 +167,15 @@ export function ChatsPage() {
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return;
 
+    const incoming = Array.from(files);
+    const oversized = incoming.filter((f) => f.size > 50 * 1024 * 1024);
+    if (oversized.length > 0) {
+      alert(`"${oversized[0].name}" exceeds the 50 MB limit.`);
+      return;
+    }
+
     const attachments = await Promise.all(
-      Array.from(files).map(async (file, index) => {
+      incoming.map(async (file, index) => {
         const kind = getAttachmentKind(file);
         const { url, size } =
           kind === 'image'
@@ -586,6 +593,7 @@ export function ChatsPage() {
                       ref={fileInputRef}
                       type="file"
                       multiple
+                      accept="image/*,video/*,application/pdf,.pdf,.doc,.docx,.cad,.dwg,.stl,.step,.3dm,application/*"
                       className="hidden"
                       onChange={(event) => handleFilesSelected(event.target.files)}
                     />

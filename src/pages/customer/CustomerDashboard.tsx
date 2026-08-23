@@ -17,8 +17,8 @@ import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompressi
 
 // ─── Constants & Helpers ───────────────────────────────────────────────────────
 
-const MAX_FILES = 10;
-const MAX_FILE_SIZE_MB = 5;
+const MAX_FILES = 50;
+const MAX_FILE_SIZE_MB = 50;
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   Rings: '💍',
@@ -290,7 +290,8 @@ export function CustomerDashboard() {
       const newFiles: UploadedFile[] = await Promise.all(
         toProcess.map(async (file, i) => {
           const isImage = file.type.startsWith('image/');
-          const isPdf = file.type === 'application/pdf';
+          const isVideo = file.type.startsWith('video/');
+          const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
           const { dataUrl, size } = isImage
             ? await compressImageFile(file)
             : { dataUrl: await readFileAsDataUrl(file), size: file.size };
@@ -298,9 +299,9 @@ export function CustomerDashboard() {
             id: Date.now() + i,
             name: file.name,
             size,
-            type: isImage ? 'image/jpeg' : file.type,
+            type: isImage ? 'image/jpeg' : file.type || 'application/octet-stream',
             dataUrl,
-            kind: isImage ? 'image' : isPdf ? 'pdf' : 'file',
+            kind: isImage ? 'image' : isVideo ? 'video' : isPdf ? 'pdf' : 'file',
           };
         })
       );
@@ -988,12 +989,12 @@ export function CustomerDashboard() {
 
                 {/* Image & File Upload */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Reference Images & Sketches (Max 10)</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Reference Photos, Videos & Documents</label>
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/*,.pdf"
+                    accept="image/*,video/*,application/pdf,.pdf,.doc,.docx,.cad,.dwg,.stl,.step,.3dm,application/*"
                     onChange={(e) => handleFilesSelected(e.target.files)}
                     className="hidden"
                   />
@@ -1002,8 +1003,8 @@ export function CustomerDashboard() {
                     className="border-2 border-dashed border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/30 rounded-xl p-4 text-center cursor-pointer transition-all"
                   >
                     <ImageIcon size={24} className="text-slate-400 mx-auto mb-1" />
-                    <p className="text-xs font-semibold text-slate-700">Click to upload reference photos</p>
-                    <p className="text-[10px] text-slate-400">PNG, JPG, PDF up to 5MB</p>
+                    <p className="text-xs font-semibold text-slate-700">Click to upload photos, videos, or blueprints</p>
+                    <p className="text-[10px] text-slate-400">Any file type (Images, Videos, PDFs, CAD) up to 50MB</p>
                   </div>
 
                   {/* Uploaded File Previews */}
@@ -1013,6 +1014,8 @@ export function CustomerDashboard() {
                         <div key={file.id} className="relative rounded-lg border border-slate-200 overflow-hidden group aspect-square">
                           {file.kind === 'image' ? (
                             <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover" />
+                          ) : file.kind === 'video' ? (
+                            <video src={file.dataUrl} className="w-full h-full object-cover bg-black" />
                           ) : (
                             <div className="w-full h-full bg-slate-50 flex items-center justify-center p-2 text-center text-[10px] text-slate-600 font-semibold truncate">
                               {file.name}

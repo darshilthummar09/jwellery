@@ -43,8 +43,8 @@ interface UploadedFile {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MAX_FILES = 10;
-const MAX_FILE_SIZE_MB = 5;
+const MAX_FILES = 50;
+const MAX_FILE_SIZE_MB = 50;
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; border: string; icon: React.ReactNode }> = {
   'Pending Approval': {
@@ -326,10 +326,8 @@ export function MyProductsPage() {
       const newFiles: UploadedFile[] = await Promise.all(
         toProcess.map(async (file, i) => {
           const isImage = file.type.startsWith('image/');
-          const isPdf = file.type === 'application/pdf';
-          // Images are resized/re-encoded before storage -- a real phone photo
-          // (2-8MB) otherwise blows past the browser's localStorage quota for
-          // the whole app and silently fails to save (see imageCompression.ts).
+          const isVideo = file.type.startsWith('video/');
+          const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
           const { dataUrl, size } = isImage
             ? await compressImageFile(file)
             : { dataUrl: await readFileAsDataUrl(file), size: file.size };
@@ -337,9 +335,9 @@ export function MyProductsPage() {
             id: Date.now() + i,
             name: file.name,
             size,
-            type: isImage ? 'image/jpeg' : file.type,
+            type: isImage ? 'image/jpeg' : file.type || 'application/octet-stream',
             dataUrl,
-            kind: isImage ? 'image' : isPdf ? 'pdf' : 'file',
+            kind: (isImage ? 'image' : isVideo ? 'video' : isPdf ? 'pdf' : 'file') as UploadedFile['kind'],
           };
         })
       );
@@ -612,16 +610,16 @@ export function MyProductsPage() {
                 >
                   <Upload size={18} className="text-slate-400" />
                   <span className="text-xs font-medium text-slate-600">
-                    Click to upload images or PDFs
+                    Click to upload photos, videos, or documents
                   </span>
                   <span className="text-[10px] text-slate-400">
-                    PNG, JPG, WEBP, PDF · Max {MAX_FILE_SIZE_MB} MB each · Up to {MAX_FILES} files
+                    Images, Videos, PDFs, CAD files · Max 50 MB each
                   </span>
                   <input
                     type="file"
                     ref={fileInputRef}
                     onChange={(e) => handleFilesSelected(e.target.files)}
-                    accept="image/*,.pdf,application/pdf"
+                    accept="image/*,video/*,application/pdf,.pdf,.doc,.docx,.cad,.dwg,.stl,.step,.3dm,application/*"
                     multiple
                     className="hidden"
                   />

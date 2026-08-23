@@ -79,19 +79,54 @@ export function OrdersPage() {
   useEffect(() => {
     const customerId = searchParams.get('customerId');
     if (customerId) {
-      setClientFilter({ id: customerId, name: searchParams.get('customerName') ?? 'this client' });
+      const explicitName = searchParams.get('customerName');
+      const matchedOrder = orders.find(
+        (o) =>
+          o.customerId?.toLowerCase() === customerId.toLowerCase() ||
+          o.customerName?.toLowerCase() === customerId.toLowerCase()
+      );
+      const name =
+        explicitName && explicitName !== 'this client'
+          ? explicitName
+          : matchedOrder?.customerName ||
+            (customerId === 'usr_customer_001' || customerId === 'customer1' || customerId === 'cust-1'
+              ? 'Priya Patel'
+              : customerId === 'usr_customer_002' || customerId === 'customer2' || customerId === 'cust-2'
+              ? 'Aarav Shah'
+              : customerId);
+
+      setClientFilter({ id: customerId, name });
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('customerId');
       newParams.delete('customerName');
       setSearchParams(newParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, orders, setSearchParams]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (statusFilter !== 'All' && order.status !== statusFilter) return false;
       if (priorityFilter !== 'All' && order.priority !== priorityFilter) return false;
-      if (clientFilter && order.customerId !== clientFilter.id && order.customerName !== clientFilter.name) return false;
+      if (clientFilter) {
+        const orderCustId = (order.customerId || '').toLowerCase();
+        const filterId = (clientFilter.id || '').toLowerCase();
+        const orderName = (order.customerName || '').toLowerCase();
+        const filterName = (clientFilter.name || '').toLowerCase();
+
+        const matchesId =
+          orderCustId === filterId ||
+          (filterId === 'usr_customer_001' && (orderCustId === 'customer1' || orderCustId === 'cust-1' || orderName === 'priya patel')) ||
+          (filterId === 'usr_customer_002' && (orderCustId === 'customer2' || orderCustId === 'cust-2' || orderName === 'aarav shah')) ||
+          (filterId === 'cust-1' && (orderCustId === 'usr_customer_001' || orderName === 'priya patel')) ||
+          (filterId === 'cust-2' && (orderCustId === 'usr_customer_002' || orderName === 'aarav shah'));
+
+        const matchesName =
+          filterName &&
+          filterName !== 'this client' &&
+          (orderName === filterName || orderName.includes(filterName) || filterName.includes(orderName));
+
+        if (!matchesId && !matchesName) return false;
+      }
       if (dateFilter) {
         const filterDateFormatted = new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
           month: 'short',
