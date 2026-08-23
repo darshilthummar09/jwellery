@@ -3,7 +3,7 @@ export interface Customer {
   name: string;
   email: string;
   orders: number;
-  spent: string;
+  spent?: string;
   joined: string;
   phone: string;
 }

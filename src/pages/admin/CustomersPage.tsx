@@ -100,7 +100,6 @@ export function CustomersPage() {
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Customer</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Orders</th>
-                    <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Total Spent</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Joined</th>
                   </tr>
                 </thead>
@@ -117,7 +116,6 @@ export function CustomersPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-slate-700 whitespace-nowrap">{customer.orders}</td>
-                      <td className="px-6 py-4 font-semibold text-slate-800 whitespace-nowrap">{customer.spent}</td>
                       <td className="px-6 py-4 text-slate-400 text-xs whitespace-nowrap">{customer.joined}</td>
                     </tr>
                   ))}
@@ -139,8 +137,8 @@ export function CustomersPage() {
                     <div className="text-xs text-slate-400 truncate">{customer.email}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-semibold text-slate-800">{customer.spent}</div>
-                    <div className="text-[11px] text-slate-400">{customer.orders} order{customer.orders === 1 ? '' : 's'}</div>
+                    <div className="text-sm font-semibold text-slate-800">{customer.orders} order{customer.orders === 1 ? '' : 's'}</div>
+                    <div className="text-[11px] text-slate-400">Joined {customer.joined}</div>
                   </div>
                 </button>
               ))}
@@ -160,7 +158,6 @@ export function CustomersPage() {
               fields={[
                 { label: 'Phone', value: selectedCustomer.phone },
                 { label: 'Orders', value: selectedCustomer.orders },
-                { label: 'Total Spent', value: selectedCustomer.spent },
                 { label: 'Joined', value: selectedCustomer.joined },
               ]}
               actions={
@@ -193,13 +190,9 @@ export function CustomersPage() {
               Email
               <input required type="email" value={draftCustomer.email} onChange={(event) => setDraftCustomer({ ...draftCustomer, email: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400" />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
               Phone
               <input required value={draftCustomer.phone} onChange={(event) => setDraftCustomer({ ...draftCustomer, phone: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400" />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Total Spent
-              <input value={draftCustomer.spent} onChange={(event) => setDraftCustomer({ ...draftCustomer, spent: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400" />
             </label>
             <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
               <button type="button" onClick={() => setDraftCustomer(null)} className="px-4 py-2.5 sm:py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold rounded-xl transition-colors">Cancel</button>
