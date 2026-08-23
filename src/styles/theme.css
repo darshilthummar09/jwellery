@@ -41,6 +41,17 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+input,
+textarea,
+select {
+  color: #0f172a;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+}
+
 /* Modern clean scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
