@@ -348,7 +348,7 @@ export function AiStudioPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder="Tell Aura how to refine your design..."
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 font-medium placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
             />
             <button
               onClick={handleSendMessage}
