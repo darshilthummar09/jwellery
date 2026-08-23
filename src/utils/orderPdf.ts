@@ -6,50 +6,82 @@ const MARGIN = 40;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
 /**
- * Re-encodes any browser-decodable image (PNG/JPEG/WEBP/etc, from a data URL) as a
- * JPEG via canvas, so jsPDF's addImage always receives a format it can embed reliably.
+ * Loads and re-encodes any image (data URL or external HTTPS URL) safely without canvas tainting.
  */
-function loadImageAsJpeg(dataUrl: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx || !canvas.width || !canvas.height) {
-        resolve(null);
-        return;
-      }
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.82), width: canvas.width, height: canvas.height });
-    };
-    img.onerror = () => resolve(null);
-    img.src = dataUrl;
-  });
+async function loadImageAsJpeg(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    let localDataUrl = url;
+
+    // For HTTP/HTTPS remote URLs (e.g. Unsplash), fetch as blob first to prevent canvas tainting
+    if (!url.startsWith('data:')) {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      localDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx || !canvas.width || !canvas.height) {
+            resolve({ dataUrl: localDataUrl, width: img.naturalWidth || 400, height: img.naturalHeight || 300 });
+            return;
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          resolve({
+            dataUrl: canvas.toDataURL('image/jpeg', 0.85),
+            width: canvas.width,
+            height: canvas.height,
+          });
+        } catch {
+          // If canvas still fails for any reason, return the safe local data URL directly
+          resolve({ dataUrl: localDataUrl, width: img.naturalWidth || 400, height: img.naturalHeight || 300 });
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = localDataUrl;
+    });
+  } catch (err) {
+    console.warn('Failed to load image for PDF embedding:', err);
+    return null;
+  }
 }
 
-function loadLogoImage(): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx || !canvas.width || !canvas.height) {
-        resolve(null);
-        return;
-      }
-      ctx.drawImage(img, 0, 0);
-      resolve({ dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
-    };
-    img.onerror = () => resolve(null);
-    img.src = '/logo.png';
-  });
+async function loadLogoImage(): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    const res = await fetch('/logo.png');
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({ dataUrl, width: img.naturalWidth || 120, height: img.naturalHeight || 40 });
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  } catch {
+    return null;
+  }
 }
 
 export interface GeneratedOrderPdf {
@@ -286,13 +318,14 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
 
   const safeName = (order.name || 'order').replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/(^-|-$)/g, '');
   const fileName = `${safeName || 'order'}-brief.pdf`;
-  let dataUri = doc.output('datauristring');
+
+  let pdfBlob: Blob = doc.output('blob');
 
   // If customer uploaded PDF documents, merge their actual full pages into this PDF
   if (pdfAssets.length > 0) {
     try {
       const { PDFDocument } = await import('pdf-lib');
-      const basePdfBytes = doc.output('arraybuffer');
+      const basePdfBytes = await pdfBlob.arrayBuffer();
       const mergedPdf = await PDFDocument.load(basePdfBytes);
 
       for (const asset of pdfAssets) {
@@ -308,17 +341,29 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
       }
 
       const mergedBytes = await mergedPdf.save();
-      let binary = '';
-      const len = mergedBytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(mergedBytes[i]);
-      }
-      const base64 = btoa(binary);
-      dataUri = `data:application/pdf;base64,${base64}`;
+      pdfBlob = new Blob([mergedBytes], { type: 'application/pdf' });
     } catch (err) {
       console.warn('PDF merging error, falling back to base PDF:', err);
     }
   }
 
-  return { dataUri, fileName, approxSize: Math.round((dataUri.length * 3) / 4) };
+  const blobUrl = URL.createObjectURL(pdfBlob);
+
+  return {
+    dataUri: blobUrl,
+    fileName,
+    approxSize: pdfBlob.size,
+  };
+}
+
+/** Utility to reliably trigger download of generated PDF */
+export function downloadOrderPdf(blobUrl: string, fileName: string) {
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+  }, 300);
 }

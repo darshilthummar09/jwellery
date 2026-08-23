@@ -109,11 +109,6 @@ function SidebarContent({
             collapsed && !isMobile ? 'w-8 object-cover object-left' : 'w-auto object-contain'
           }`}
         />
-        {(!collapsed || isMobile) && (
-          <div className="min-w-0">
-            <div className="text-[10px] text-slate-400 font-bold leading-none tracking-widest uppercase">Dream Jewels</div>
-          </div>
-        )}
         {isMobile && onClose && (
           <button
             onClick={onClose}

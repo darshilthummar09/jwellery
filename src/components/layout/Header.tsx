@@ -290,9 +290,6 @@ export function Header({ onMenuClick, isCustomer }: HeaderProps) {
             alt="Dream Jewels"
             className="h-8 w-auto object-contain select-none"
           />
-          <span className="font-serif font-bold text-lg text-slate-900 tracking-wide hidden sm:inline-block">
-            Dream Jewels
-          </span>
         </div>
       ) : (
         <button

@@ -11,7 +11,7 @@ import { Order, OrderStatus, useChatNotification } from '../../context/ChatNotif
 import { useAuth } from '../../hooks/useAuth';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
-import { generateOrderPdf } from '../../utils/orderPdf';
+import { generateOrderPdf, downloadOrderPdf } from '../../utils/orderPdf';
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
   'Pending Approval': 'bg-orange-100 text-orange-700',
@@ -192,12 +192,7 @@ export function OrdersPage() {
     setPdfBusyOrderId(order.id);
     try {
       const { dataUri, fileName } = await generateOrderPdf(order, user?.name ?? 'Admin');
-      const link = document.createElement('a');
-      link.href = dataUri;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      downloadOrderPdf(dataUri, fileName);
     } catch (err) {
       console.error('Error generating PDF:', err);
     } finally {
@@ -229,12 +224,7 @@ export function OrdersPage() {
         });
       } else {
         // Fallback: Download the PDF and copy order brief to clipboard
-        const link = document.createElement('a');
-        link.href = dataUri;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        downloadOrderPdf(dataUri, fileName);
 
         const summary = `Order ${order.id}: ${order.name}\nCustomer: ${order.customerName}\nMetal: ${order.metal} (${order.karat})\nTarget Date: ${order.due || 'To be scheduled'}`;
         if (navigator.clipboard) {

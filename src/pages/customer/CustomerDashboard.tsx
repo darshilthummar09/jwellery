@@ -383,20 +383,6 @@ export function CustomerDashboard() {
           />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Live Support Chat Button */}
-          <button
-            onClick={handleOpenGeneralChat}
-            className="relative flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl border border-emerald-200 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
-          >
-            <MessageCircle size={16} className="text-emerald-600" />
-            <span>Support Chat</span>
-            {unreadChatCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 bg-emerald-600 text-white text-[10px] font-bold rounded-full animate-pulse">
-                {unreadChatCount}
-              </span>
-            )}
-          </button>
-
           {/* + Request Custom Order Button */}
           <button
             onClick={() => setIsOrderModalOpen(true)}
@@ -409,7 +395,7 @@ export function CustomerDashboard() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 mb-8">
         <StatCard
           title="Active Orders"
           value={activeOrders.length.toString()}
@@ -421,13 +407,6 @@ export function CustomerDashboard() {
           value={readyOrders.length.toString()}
           icon={CheckCircle2}
           color="blue"
-        />
-        <StatCard
-          title="Live Support Chat"
-          value={unreadChatCount > 0 ? `${unreadChatCount} New` : "Online"}
-          icon={MessageCircle}
-          color="purple"
-          onClick={handleOpenGeneralChat}
         />
       </div>
 
