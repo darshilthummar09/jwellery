@@ -158,7 +158,7 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
     ['Customer', order.customerName || '—'],
     ['Created Date', order.created || '—'],
     ['Metal & Purity', order.metal ? `${order.metal}${order.karat ? ` (${order.karat})` : ''}` : '—'],
-    ['Wanted By (Target Date)', order.due || order.deliveryDate || order.budget || '—'],
+    ['Wanted By (Target Date)', order.due || order.budget || '—'],
     ['Size', order.size || 'Not specified'],
     ['Weight', order.weight || 'Not specified'],
     ['Priority', order.priority || 'Medium'],
@@ -341,7 +341,7 @@ export async function generateOrderPdf(order: Order, generatedBy: string): Promi
       }
 
       const mergedBytes = await mergedPdf.save();
-      pdfBlob = new Blob([mergedBytes], { type: 'application/pdf' });
+      pdfBlob = new Blob([mergedBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
     } catch (err) {
       console.warn('PDF merging error, falling back to base PDF:', err);
     }
