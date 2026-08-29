@@ -18,8 +18,19 @@ interface HeaderProps {
 
 function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const { notifications, markAllNotificationsRead, markNotificationRead, getUnreadCount, getChatUnreadCount } = useChatNotification();
+  const [isEnabling, setIsEnabling] = useState(false);
+  const {
+    notifications,
+    markAllNotificationsRead,
+    markNotificationRead,
+    getUnreadCount,
+    getChatUnreadCount,
+    enablePushNotifications,
+    pushPermission,
+    setAppBadgeCount,
+  } = useChatNotification();
   const { role } = useRole();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   // Map role to notification role
@@ -29,8 +40,18 @@ function NotificationBell() {
   const chatUnreadCount = getChatUnreadCount(notifRole);
   const unreadCount = notificationUnreadCount + chatUnreadCount;
 
+  const handleEnablePush = async () => {
+    setIsEnabling(true);
+    try {
+      await enablePushNotifications(user?.id);
+    } finally {
+      setIsEnabling(false);
+    }
+  };
+
   const handleMarkAllRead = () => {
     markAllNotificationsRead(notifRole);
+    setAppBadgeCount(0);
   };
 
   const handleViewAll = () => {
@@ -83,6 +104,23 @@ function NotificationBell() {
               >
                 Mark all read
               </button>
+            </div>
+
+            {/* PWA Device Push & Icon Badge Prompt / Status */}
+            <div className="bg-slate-50/80 px-4 py-2 border-b border-slate-100 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-600">
+                <span className={`w-2 h-2 rounded-full ${pushPermission === 'granted' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                <span>{pushPermission === 'granted' ? 'PWA Badges & Push Active' : 'Device Push & Badges'}</span>
+              </div>
+              {pushPermission !== 'granted' && (
+                <button
+                  onClick={handleEnablePush}
+                  disabled={isEnabling}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] transition-colors disabled:opacity-50"
+                >
+                  {isEnabling ? 'Enabling...' : 'Enable'}
+                </button>
+              )}
             </div>
             <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
               {chatUnreadCount > 0 && (

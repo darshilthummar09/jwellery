@@ -1,0 +1,37 @@
+{
+  "name": "Dream Jewels — Jewellery Management SaaS",
+  "short_name": "Dream Jewels",
+  "description": "Role-based jewellery management platform for Super Admins, Admins, Designers, and Customers.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0a0608",
+  "icons": [
+    {
+      "src": "/pwa-192x192-v4.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-192x192-v4.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-512x512-v4.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-192x192-v4.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "badge"
+    }
+  ]
+}

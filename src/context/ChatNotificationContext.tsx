@@ -1,6 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { onValue, ref, set } from 'firebase/database';
 import { firebaseDatabase, isFirebaseConfigured } from '../services/firebase';
+import {
+  setAppBadge,
+  clearAppBadge,
+  requestPushPermission,
+  getPushPermissionState,
+  registerForegroundPushListener,
+  showLocalNotification,
+} from '../services/notificationService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +144,10 @@ interface ChatNotificationContextValue {
   getUnreadCount: (role: 'customer' | 'admin' | 'designer') => number;
   getChatUnreadCount: (role: 'customer' | 'admin' | 'designer') => number;
   deleteMessage: (threadId: string, messageId: number) => void;
+  enablePushNotifications: (userId?: string) => Promise<{ success: boolean; error?: string }>;
+  pushPermission: NotificationPermission | 'unsupported';
+  setAppBadgeCount: (count: number) => Promise<void>;
+  clearAppBadgeCount: () => Promise<void>;
 }
 
 const ChatNotificationContext = createContext<ChatNotificationContextValue | null>(null);
@@ -274,9 +286,46 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const [users, setUsers] = useState<User[]>(storedState?.users ? parseUsersFromState(storedState.users) : MOCK_USERS);
   const [notifications, setNotifications] = useState<AppNotification[]>(storedState ? parseNotificationsFromState(storedState.notifications) : INITIAL_NOTIFICATIONS);
   const [notifCounter, setNotifCounter] = useState(storedState?.notifCounter ?? 9000);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(getPushPermissionState());
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const lastSerializedStateRef = useRef('');
   const channelRef = useRef<BroadcastChannel | null>(null);
+
+  // ─── Automated PWA App Icon Badging Synchronization ────────────────────────
+  useEffect(() => {
+    const unreadNotifications = notifications.filter((n) => !n.read).length;
+    const unreadMessages = threads.reduce((acc, t) => acc + (t.unread || 0) + (t.customerUnread || 0), 0);
+    const totalUnread = unreadNotifications + unreadMessages;
+
+    // Update app icon badge count on Android / iOS 16.4+ / Desktop
+    setAppBadge(totalUnread);
+  }, [notifications, threads]);
+
+  // ─── Foreground Push Notification Listener ──────────────────────────────────
+  useEffect(() => {
+    const unsub = registerForegroundPushListener((payload) => {
+      const title = payload.notification?.title || payload.data?.title || 'Dream Jewels Update';
+      const body = payload.notification?.body || payload.data?.body || 'You have a new update.';
+      
+      addNotification({
+        role: 'admin',
+        title,
+        body,
+        time: 'Just now',
+        read: false,
+      });
+
+      showLocalNotification(title, { body });
+    });
+
+    return () => unsub();
+  }, []);
+
+  const enablePushNotifications = useCallback(async (userId?: string) => {
+    const res = await requestPushPermission(userId);
+    setPushPermission(getPushPermissionState());
+    return res;
+  }, []);
 
   const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
     const items = Array.isArray(n) ? n : [n];
@@ -1001,6 +1050,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         getUnreadCount,
         getChatUnreadCount,
         deleteMessage,
+        enablePushNotifications,
+        pushPermission,
+        setAppBadgeCount: setAppBadge,
+        clearAppBadgeCount: clearAppBadge,
       }}
     >
       {children}

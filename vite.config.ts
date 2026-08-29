@@ -26,23 +26,41 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'pwa-192x192-v4.png', 'pwa-512x512-v4.png', 'firebase-messaging-sw.js'],
       manifest: {
-        name: 'Jewelry Dream',
-        short_name: 'Dream',
-        description: 'Jewelry Dream Application',
-        theme_color: '#ffffff',
+        name: 'Dream Jewels — Jewellery Management SaaS',
+        short_name: 'Dream Jewels',
+        description: 'Jewellery Management SaaS with Real-time Chat, Orders, and Push Notifications.',
+        theme_color: '#0a0608',
+        background_color: '#ffffff',
+        display: 'standalone',
+        orientation: 'portrait-primary',
+        start_url: '/',
+        id: '/',
         icons: [
           {
             src: '/pwa-192x192-v4.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: '/pwa-192x192-v4.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
           },
           {
             src: '/pwa-512x512-v4.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: '/pwa-192x192-v4.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'badge'
           }
         ]
       }
