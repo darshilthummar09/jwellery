@@ -16,35 +16,53 @@ const firebaseConfig = {
 
 // ─── App Icon Badging API ───────────────────────────────────────────────────
 
+let lastBadgeCount: number | null = null;
+let badgeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 /**
  * Sets the numeric badge count on the PWA icon (Android, iOS 16.4+ PWA, Desktop Dock/Taskbar).
+ * Debounced with duplicate suppression to prevent OS taskbar / Chrome profile badge flickering.
  */
 export const setAppBadge = async (count: number): Promise<void> => {
-  try {
-    if ('setAppBadge' in navigator) {
-      if (count > 0) {
-        await navigator.setAppBadge(count);
-      } else {
-        await navigator.clearAppBadge();
-      }
-    }
+  const safeCount = Math.max(0, Math.floor(count));
+  if (lastBadgeCount === safeCount) return;
+  lastBadgeCount = safeCount;
 
-    // Also notify active service worker if registered
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({
-        type: count > 0 ? 'SET_BADGE' : 'CLEAR_BADGE',
-        count,
-      });
-    }
-  } catch (err) {
-    console.debug('Badge API not supported or restricted:', err);
+  if (badgeDebounceTimer) {
+    clearTimeout(badgeDebounceTimer);
   }
+
+  badgeDebounceTimer = setTimeout(async () => {
+    try {
+      if ('setAppBadge' in navigator) {
+        if (safeCount > 0) {
+          await navigator.setAppBadge(safeCount);
+        } else {
+          await navigator.clearAppBadge();
+        }
+      }
+
+      // Also notify active service worker if registered
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: safeCount > 0 ? 'SET_BADGE' : 'CLEAR_BADGE',
+          count: safeCount,
+        });
+      }
+    } catch (err) {
+      console.debug('Badge API not supported or restricted:', err);
+    }
+  }, 200);
 };
 
 /**
  * Clears the badge from the PWA app icon.
  */
 export const clearAppBadge = async (): Promise<void> => {
+  lastBadgeCount = 0;
+  if (badgeDebounceTimer) {
+    clearTimeout(badgeDebounceTimer);
+  }
   try {
     if ('clearAppBadge' in navigator) {
       await navigator.clearAppBadge();

@@ -13,24 +13,52 @@ import { Customer, INITIAL_CUSTOMERS, blankCustomer } from '../../data/mock-cust
 
 export function CustomersPage() {
   const navigate = useNavigate();
-  const { createThreadForOrder, orders } = useChatNotification();
-  const [customers, setCustomers] = useState(INITIAL_CUSTOMERS);
+  const { createThreadForOrder, orders, users, addUser, deleteUser } = useChatNotification();
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [draftCustomer, setDraftCustomer] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
 
-  // Client → All Orders: derive each customer's live order count from real order data
-  // rather than the static seed value, so it always reflects what's actually on the Orders page.
+  // Merge mock customers and live registered users
+  const mergedCustomers: Customer[] = useMemo(() => {
+    const map = new Map<string, Customer>();
+
+    INITIAL_CUSTOMERS.forEach((c) => map.set(c.id, c));
+
+    users
+      .filter((u) => u.role === 'customer')
+      .forEach((u) => {
+        const existing = map.get(u.id);
+        if (existing) {
+          map.set(u.id, { ...existing, name: u.name, email: u.email });
+        } else {
+          map.set(u.id, {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: '+91 98765 43210',
+            totalSpent: '₹0',
+            orders: 0,
+            joined: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'Recent',
+          });
+        }
+      });
+
+    return Array.from(map.values());
+  }, [users]);
+
+  // Derive each customer's live order count from real order data
   const customersWithLiveCounts = useMemo(
     () =>
-      customers.map((customer) => ({
+      mergedCustomers.map((customer) => ({
         ...customer,
         orders: orders.filter(
-          (order) => order.customerId === customer.id || order.customerName.toLowerCase() === customer.name.toLowerCase()
+          (order) =>
+            order.customerId === customer.id ||
+            order.customerName.toLowerCase() === customer.name.toLowerCase()
         ).length,
       })),
-    [customers, orders]
+    [mergedCustomers, orders]
   );
 
   const filteredCustomers = useMemo(() => {
@@ -45,9 +73,19 @@ export function CustomersPage() {
     event.preventDefault();
     if (!draftCustomer) return;
 
-    const id = draftCustomer.id || draftCustomer.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const id = draftCustomer.id || `usr_cust_${Date.now()}`;
     const customerToSave = { ...draftCustomer, id };
-    setCustomers((current) => [customerToSave, ...current]);
+
+    addUser({
+      id,
+      name: customerToSave.name,
+      username: customerToSave.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, ''),
+      email: customerToSave.email,
+      role: 'customer',
+      password: 'password123',
+      createdAt: new Date().toISOString(),
+    });
+
     setSelectedCustomer(customerToSave);
     setDraftCustomer(null);
   };

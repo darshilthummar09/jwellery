@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import { FileText, MessageCircle, Send, Download, X, HeadphonesIcon, ArrowLeft, Gem } from 'lucide-react';
+import {
+  FileText,
+  MessageCircle,
+  Send,
+  Download,
+  X,
+  HeadphonesIcon,
+  ArrowLeft,
+  Gem,
+  Paperclip,
+  Trash2,
+} from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { useAuth } from '../../hooks/useAuth';
 import { Avatar } from '../../components/common/Avatar';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 import type { ChatAttachment, OrderDetails } from '../../context/ChatNotificationContext';
+import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -42,12 +54,25 @@ function AttachmentList({
         }
 
         if (attachment.kind === 'video') {
-          return <video key={attachment.id} src={attachment.url} controls className="max-h-56 max-w-full rounded-xl bg-black" />;
+          return (
+            <video
+              key={attachment.id}
+              src={attachment.url}
+              controls
+              className="max-h-56 max-w-full rounded-xl bg-black"
+            />
+          );
         }
 
         return (
-          <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl px-3 py-2 border bg-slate-50 border-slate-200 text-slate-700">
-            <FileText size={17} className="flex-shrink-0" />
+          <a
+            key={attachment.id}
+            href={attachment.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 rounded-xl px-3 py-2 border bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <FileText size={17} className="flex-shrink-0 text-emerald-600" />
             <span className="min-w-0">
               <span className="block text-xs font-semibold truncate">{attachment.name}</span>
               <span className="block text-[10px] text-slate-400">{formatFileSize(attachment.size)}</span>
@@ -68,12 +93,14 @@ export function GeneralChatPage() {
 
   const { threads, sendCustomerMessage, markThreadRead, createThreadForOrder, deleteMessage } = useChatNotification();
   const [input, setInput] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const customerId = user?.id ?? user?.email ?? 'customer';
   const customerName = user?.name ?? 'Customer';
-  
+
   const supportThread = threads.find(
     (t) =>
       t.participantRole !== 'designer' &&
@@ -101,12 +128,42 @@ export function GeneralChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [supportThread?.messages.length]);
+  }, [supportThread?.messages.length, pendingAttachments.length]);
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const incoming: ChatAttachment[] = await Promise.all(
+      Array.from(files).map(async (file, index) => {
+        const isImage = file.type.startsWith('image/');
+        const isVideo = file.type.startsWith('video/');
+        const { url, size } = isImage
+          ? await compressImageFile(file).then((r) => ({ url: r.dataUrl, size: r.size }))
+          : { url: await readFileAsDataUrl(file), size: file.size };
+
+        return {
+          id: Date.now() + index,
+          name: file.name,
+          size,
+          type: isImage ? 'image/jpeg' : file.type || 'application/octet-stream',
+          url,
+          kind: (isImage ? 'image' : isVideo ? 'video' : 'file') as ChatAttachment['kind'],
+        };
+      })
+    );
+
+    setPendingAttachments((prev) => [...prev, ...incoming]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removePendingAttachment = (id: number) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
 
   const sendMessage = () => {
-    if (!input.trim()) return;
-    sendCustomerMessage(customerId, customerName, input.trim(), supportThread?.id);
+    if (!input.trim() && pendingAttachments.length === 0) return;
+    sendCustomerMessage(customerId, customerName, input.trim(), supportThread?.id, pendingAttachments);
     setInput('');
+    setPendingAttachments([]);
   };
 
   const messages = supportThread?.messages ?? [];
@@ -122,7 +179,11 @@ export function GeneralChatPage() {
             <ArrowLeft size={14} />
             Back to Dashboard
           </button>
-          <PageTitle title="Customer Support Chat" subtitle="Chat directly with our luxury jewellery experts." className="mb-0" />
+          <PageTitle
+            title="Customer Support Chat"
+            subtitle="Chat directly with our luxury jewellery experts."
+            className="mb-0"
+          />
         </div>
       </div>
 
@@ -139,14 +200,17 @@ export function GeneralChatPage() {
           </div>
           <button
             onClick={() => navigate('/dashboard/customer/my-products')}
-            className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap cursor-pointer"
           >
             View Order
           </button>
         </div>
       )}
-      
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col" style={{ height: 'calc(100vh - 250px)', minHeight: '480px' }}>
+
+      <div
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col"
+        style={{ height: 'calc(100vh - 250px)', minHeight: '480px' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
@@ -172,13 +236,16 @@ export function GeneralChatPage() {
               </div>
               <p className="text-sm font-semibold text-slate-700">How can we help you today?</p>
               <p className="text-xs text-slate-400 mt-1 max-w-[280px]">
-                Send a message below and our jewellery team will respond right away.
+                Send a message or upload jewellery reference photos below and our team will respond right away.
               </p>
             </div>
           ) : (
             messages.map((msg) => {
               const isMe = msg.from === 'customer';
-              const isOrderCard = msg.text.startsWith('ORDER DETAILS') || msg.text.includes('ORDER DETAILS') || msg.text.startsWith('📋 ORDER DETAILS');
+              const isOrderCard =
+                msg.text.startsWith('ORDER DETAILS') ||
+                msg.text.includes('ORDER DETAILS') ||
+                msg.text.startsWith('📋 ORDER DETAILS');
 
               if (isOrderCard) {
                 return (
@@ -190,21 +257,38 @@ export function GeneralChatPage() {
                           <span className="text-white font-bold text-sm tracking-wide">Your Order Summary</span>
                         </div>
                         <div className="px-4 py-3 space-y-1.5">
-                          {msg.text.split('\n').slice(2).map((row, i) => {
-                            if (row.startsWith('--') || row.startsWith('──') || row.startsWith('â')) return <div key={i} className="border-t border-slate-100 my-1.5" />;
-                            const colonIdx = row.indexOf(':');
-                            if (colonIdx === -1) return null;
-                            return (
-                              <div key={i} className="flex gap-2 text-xs">
-                                <span className="text-slate-400 font-medium whitespace-nowrap w-24 flex-shrink-0">{row.slice(0, colonIdx + 1).trim()}</span>
-                                <span className="text-slate-800 font-semibold">{row.slice(colonIdx + 1).trim()}</span>
-                              </div>
-                            );
-                          })}
+                          {msg.text
+                            .split('\n')
+                            .slice(2)
+                            .map((row, i) => {
+                              if (
+                                row.startsWith('--') ||
+                                row.startsWith('──') ||
+                                row.startsWith('â')
+                              )
+                                return <div key={i} className="border-t border-slate-100 my-1.5" />;
+                              const colonIdx = row.indexOf(':');
+                              if (colonIdx === -1) return null;
+                              return (
+                                <div key={i} className="flex gap-2 text-xs">
+                                  <span className="text-slate-400 font-medium whitespace-nowrap w-24 flex-shrink-0">
+                                    {row.slice(0, colonIdx + 1).trim()}
+                                  </span>
+                                  <span className="text-slate-800 font-semibold">
+                                    {row.slice(colonIdx + 1).trim()}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           {msg.attachments && msg.attachments.length > 0 && (
                             <div className="pt-2 mt-2 border-t border-slate-100">
-                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-2">Attached Files</p>
-                              <AttachmentList attachments={msg.attachments} onImageClick={(url, name) => setLightboxImage({ url, name })} />
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-2">
+                                Attached Files
+                              </p>
+                              <AttachmentList
+                                attachments={msg.attachments}
+                                onImageClick={(url, name) => setLightboxImage({ url, name })}
+                              />
                             </div>
                           )}
                         </div>
@@ -216,25 +300,41 @@ export function GeneralChatPage() {
               }
 
               return (
-                <div key={msg.id} className={`flex items-end gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
+                <div
+                  key={msg.id}
+                  className={`flex items-end gap-2.5 group ${isMe ? 'flex-row-reverse' : ''}`}
+                >
                   {!isMe && <Avatar user={{ name: 'Support' }} size="xs" />}
-                  <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                    <div className="flex items-center gap-2 group">
-                      {isMe && (
-                        <button 
-                          onClick={() => supportThread && deleteMessage(supportThread.id, msg.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded text-red-500 hover:text-red-700 text-xs transition-opacity cursor-pointer order-last"
+                  <div className={`max-w-[75%] flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                    <div
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        isMe
+                          ? 'bg-emerald-600 text-white rounded-br-xs'
+                          : 'bg-slate-100 text-slate-800 rounded-bl-xs'
+                      }`}
+                    >
+                      {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="mt-2">
+                          <AttachmentList
+                            attachments={msg.attachments}
+                            onImageClick={(url, name) => setLightboxImage({ url, name })}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 px-1">
+                      <span>{msg.time}</span>
+                      {isMe && supportThread && (
+                        <button
+                          onClick={() => deleteMessage(supportThread.id, msg.id)}
+                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-0.5"
                           title="Delete message"
                         >
-                          Delete
+                          <Trash2 size={11} />
                         </button>
                       )}
-                      <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed space-y-3 ${isMe ? 'bg-emerald-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>
-                        {msg.text && <p>{msg.text}</p>}
-                        {msg.attachments && msg.attachments.length > 0 && <AttachmentList attachments={msg.attachments} onImageClick={(url, name) => setLightboxImage({ url, name })} />}
-                      </div>
                     </div>
-                    <span className="text-[10px] text-slate-400 px-1">{msg.time}</span>
                   </div>
                 </div>
               );
@@ -243,17 +343,66 @@ export function GeneralChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Bar */}
-        <div className="px-5 py-4 border-t border-slate-100 flex items-center gap-3">
+        {/* Pending attachments preview bar */}
+        {pendingAttachments.length > 0 && (
+          <div className="px-5 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2 overflow-x-auto">
+            {pendingAttachments.map((att) => (
+              <div
+                key={att.id}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 shadow-2xs flex-shrink-0"
+              >
+                {att.kind === 'image' ? (
+                  <img src={att.url} alt={att.name} className="w-5 h-5 rounded object-cover" />
+                ) : (
+                  <FileText size={14} className="text-emerald-600" />
+                )}
+                <span className="max-w-[120px] truncate">{att.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removePendingAttachment(att.id)}
+                  className="text-slate-400 hover:text-red-500 p-0.5 rounded transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Input Bar with Paperclip Upload */}
+        <div className="px-5 py-4 border-t border-slate-100 flex items-center gap-2 sm:gap-3">
           <Avatar user={user} size="xs" />
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => handleFilesSelected(e.target.files)}
+            multiple
+            accept="image/*,video/*,application/pdf,.pdf,.doc,.docx"
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-10 h-10 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
+            title="Attach images, documents or sketches"
+          >
+            <Paperclip size={17} />
+          </button>
+
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Ask a question or request updates on your order..."
+            placeholder="Type a message or share design sketches..."
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
           />
-          <button onClick={sendMessage} className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-sm active:scale-95 cursor-pointer">
+          <button
+            onClick={sendMessage}
+            disabled={!input.trim() && pendingAttachments.length === 0}
+            className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex-shrink-0 cursor-pointer"
+          >
             <Send size={15} />
           </button>
         </div>
@@ -265,7 +414,10 @@ export function GeneralChatPage() {
           className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4"
           onClick={() => setLightboxImage(null)}
         >
-          <div className="absolute top-4 right-4 flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute top-4 right-4 flex items-center gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
             <a
               href={lightboxImage.url}
               download={lightboxImage.name}
@@ -276,13 +428,16 @@ export function GeneralChatPage() {
             </a>
             <button
               onClick={() => setLightboxImage(null)}
-              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
               title="Close"
             >
               <X size={18} />
             </button>
           </div>
-          <div className="max-w-4xl max-h-[80vh] flex flex-col items-center justify-center gap-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="max-w-4xl max-h-[80vh] flex flex-col items-center justify-center gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <img
               src={lightboxImage.url}
               alt={lightboxImage.name}

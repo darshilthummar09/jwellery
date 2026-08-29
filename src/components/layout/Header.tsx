@@ -56,14 +56,16 @@ function NotificationBell() {
 
   const handleViewAll = () => {
     setOpen(false);
-    if (role === 'admin') navigate('/dashboard/admin/chats');
+    if (role === 'super-admin') navigate('/dashboard/super-admin/orders');
+    else if (role === 'admin') navigate('/dashboard/admin/chats');
     else if (role === 'customer') navigate('/dashboard/customer/notifications');
     else if (role === 'designer') navigate('/dashboard/designer/notifications');
   };
 
   const handleOpenChats = () => {
     setOpen(false);
-    if (role === 'admin') navigate('/dashboard/admin/chats');
+    if (role === 'super-admin') navigate('/dashboard/super-admin/orders');
+    else if (role === 'admin') navigate('/dashboard/admin/chats');
     else if (role === 'customer') navigate('/dashboard/customer/chat');
     else if (role === 'designer') navigate('/dashboard/designer/chat');
   };
@@ -156,7 +158,9 @@ function NotificationBell() {
                           navigate(`/dashboard/designer/chat`);
                         }
                       } else if (n.type === 'order' && n.orderId) {
-                        if (role === 'admin') {
+                        if (role === 'super-admin') {
+                          navigate(`/dashboard/super-admin/orders?id=${n.orderId}`);
+                        } else if (role === 'admin') {
                           navigate(`/dashboard/admin/orders?id=${n.orderId}`);
                         } else if (role === 'customer') {
                           navigate(`/dashboard/customer/my-products?id=${n.orderId}`);

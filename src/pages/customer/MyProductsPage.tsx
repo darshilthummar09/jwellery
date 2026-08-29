@@ -20,6 +20,7 @@ import type { OrderAttachment, OrderDetails, Order } from '../../context/ChatNot
 import { useAuth } from '../../hooks/useAuth';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
+import { getStoredCategories } from '../../services/categoryService';
 import {
   Dialog,
   DialogContent,
@@ -516,7 +517,7 @@ export function MyProductsPage() {
                 {
                   id: 'order-category', label: 'Category', value: category,
                   onChange: setCategory,
-                  options: ['Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Bangles', 'Pendants', 'Other'],
+                  options: getStoredCategories().map((c) => c.name),
                 },
                 {
                   id: 'order-metal', label: 'Metal', value: metal,

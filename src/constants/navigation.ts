@@ -10,7 +10,6 @@ export interface NavItem {
 export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Dashboard',      path: '/dashboard/super-admin',               icon: 'LayoutDashboard', description: 'Overview & metrics' },
   { label: 'Orders',         path: '/dashboard/super-admin/orders',        icon: 'Briefcase',       description: 'Manage orders' },
-  { label: 'Chats',          path: '/dashboard/super-admin/chats',         icon: 'MessageSquare',   description: 'Platform chats' },
   { label: 'Users',          path: '/dashboard/super-admin/users',         icon: 'Users',           description: 'Manage all users' },
   { label: 'Dynamic Fields', path: '/dashboard/super-admin/dynamic-fields',icon: 'Sliders',         description: 'Custom field management' },
   { label: 'Categories',     path: '/dashboard/super-admin/categories',    icon: 'Tag',             description: 'Product categories' },
@@ -27,9 +26,8 @@ export const ADMIN_NAV: NavItem[] = [
 
 export const CUSTOMER_NAV: NavItem[] = [
   { label: 'Dashboard',        path: '/dashboard/customer',                icon: 'LayoutDashboard', description: 'Your overview' },
-  // { label: 'AI Design Studio', path: '/dashboard/customer/ai-studio',       icon: 'Sparkles',        description: 'Co-create with AI' },
   { label: 'My Products',      path: '/dashboard/customer/my-products',    icon: 'ShoppingBag',     description: 'Your orders & products' },
-  // { label: 'General Chat',     path: '/dashboard/customer/chat',           icon: 'MessageCircle',   description: 'Chat with support' },
+  { label: 'Support Chat',     path: '/dashboard/customer/chat',           icon: 'MessageCircle',   description: 'Chat with support' },
   { label: 'Notifications',    path: '/dashboard/customer/notifications',  icon: 'Bell',            description: 'Your notifications' },
 ];
 

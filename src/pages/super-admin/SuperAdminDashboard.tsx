@@ -8,8 +8,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { Order, useChatNotification } from '../../context/ChatNotificationContext';
 import { MOCK_USERS } from '../../data/mock-users';
 import { INITIAL_CUSTOMERS } from '../../data/mock-customers';
-import { CATEGORIES } from './CategoriesPage';
-import { SAMPLE_FIELDS } from './DynamicFieldsPage';
+import { getStoredCategories } from '../../services/categoryService';
+import { getStoredDynamicFields } from '../../services/categoryService';
 
 interface ClientSummary {
   id: string;
@@ -51,14 +51,14 @@ function buildClientSummaries(orders: Order[]): ClientSummary[] {
 export function SuperAdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { orders } = useChatNotification();
+  const { orders, users } = useChatNotification();
 
   const activeOrders = orders.filter(o => o.status !== 'Completed' && o.status !== 'Rejected');
   const clients = buildClientSummaries(orders).slice(0, 6);
 
-  const totalUsers = MOCK_USERS.length;
-  const totalCategories = CATEGORIES.length;
-  const totalFields = SAMPLE_FIELDS.length;
+  const totalUsers = users?.length || MOCK_USERS.length;
+  const totalCategories = getStoredCategories().length;
+  const totalFields = getStoredDynamicFields().length;
 
   const goToClientOrders = (client: ClientSummary) => {
     navigate(`/dashboard/super-admin/orders?customerId=${encodeURIComponent(client.id)}&customerName=${encodeURIComponent(client.name)}`);

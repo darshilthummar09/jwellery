@@ -11,9 +11,9 @@ import { StatCard } from '../../components/common/StatCard';
 import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatNotification } from '../../context/ChatNotificationContext';
-import type { Order, OrderDetails, ChatAttachment } from '../../context/ChatNotificationContext';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
+import { getStoredCategories } from '../../services/categoryService';
 
 // ─── Constants & Helpers ───────────────────────────────────────────────────────
 
@@ -337,9 +337,17 @@ export function CustomerDashboard() {
 
     setIsSubmitting(true);
     try {
-      const formattedDate = desiredDate
-        ? new Date(desiredDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : 'To be scheduled';
+      let formattedDate = 'To be scheduled';
+      if (desiredDate) {
+        try {
+          const parsed = new Date(desiredDate.includes('T') ? desiredDate : desiredDate + 'T00:00:00');
+          if (!isNaN(parsed.getTime())) {
+            formattedDate = parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          }
+        } catch {
+          formattedDate = desiredDate;
+        }
+      }
 
       const orderPayload: OrderDetails = {
         name: name.trim(),
@@ -880,8 +888,10 @@ export function CustomerDashboard() {
                       onChange={(e) => setCategory(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none cursor-pointer"
                     >
-                      {Object.keys(CATEGORY_EMOJIS).map((cat) => (
-                        <option key={cat} value={cat} className="text-slate-800">{cat}</option>
+                      {getStoredCategories().map((cat) => (
+                        <option key={cat.name} value={cat.name} className="text-slate-800">
+                          {cat.icon} {cat.name}
+                        </option>
                       ))}
                     </select>
                   </div>

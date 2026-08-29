@@ -148,6 +148,9 @@ interface ChatNotificationContextValue {
   pushPermission: NotificationPermission | 'unsupported';
   setAppBadgeCount: (count: number) => Promise<void>;
   clearAppBadgeCount: () => Promise<void>;
+  users: User[];
+  addUser: (user: User & { password?: string }) => void;
+  deleteUser: (userId: string) => void;
 }
 
 const ChatNotificationContext = createContext<ChatNotificationContextValue | null>(null);
@@ -293,11 +296,33 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
   // ─── Automated PWA App Icon Badging Synchronization ────────────────────────
   useEffect(() => {
-    const unreadNotifications = notifications.filter((n) => !n.read).length;
-    const unreadMessages = threads.reduce((acc, t) => acc + (t.unread || 0) + (t.customerUnread || 0), 0);
-    const totalUnread = unreadNotifications + unreadMessages;
+    let currentRole: 'admin' | 'customer' | 'designer' = 'admin';
+    let currentCustId = '';
+    try {
+      const storedAuth = localStorage.getItem('auth_user') || sessionStorage.getItem('auth_user');
+      if (storedAuth) {
+        const u = JSON.parse(storedAuth);
+        if (u.role) currentRole = u.role === 'super-admin' ? 'admin' : u.role;
+        if (u.id) currentCustId = u.id;
+      }
+    } catch {}
 
-    // Update app icon badge count on Android / iOS 16.4+ / Desktop
+    const unreadNotifications = notifications.filter((n) => n.role === currentRole && !n.read).length;
+    let unreadMessages = 0;
+
+    if (currentRole === 'admin') {
+      unreadMessages = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
+    } else if (currentRole === 'customer') {
+      unreadMessages = threads
+        .filter((t) => !currentCustId || t.customerId === currentCustId || t.id === `customer-${currentCustId}`)
+        .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
+    } else if (currentRole === 'designer') {
+      unreadMessages = threads
+        .filter((t) => t.participantRole === 'designer')
+        .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
+    }
+
+    const totalUnread = unreadNotifications + unreadMessages;
     setAppBadge(totalUnread);
   }, [notifications, threads]);
 
@@ -428,7 +453,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         const val = snapshot.val();
         if (val) {
           const parsed = parseOrdersFromState(val);
-          setOrders(parsed);
+          setOrders((prev) => {
+            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+            const newStr = JSON.stringify(sanitizeForFirebase(parsed));
+            return prevStr === newStr ? prev : parsed;
+          });
         }
       }, (err) => console.warn('Firebase RTDB orders sync:', err.message));
       unsubs.push(unsubOrders);
@@ -439,9 +468,12 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         const val = snapshot.val();
         if (val) {
           const parsed = parseUsersFromState(val);
-          setUsers(parsed);
+          setUsers((prev) => {
+            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+            const newStr = JSON.stringify(sanitizeForFirebase(parsed));
+            return prevStr === newStr ? prev : parsed;
+          });
         } else {
-          // Initialize users in Firebase if not set
           try {
             set(usersRef, sanitizeForFirebase(MOCK_USERS));
           } catch {
@@ -451,18 +483,28 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       }, (err) => console.warn('Firebase RTDB users sync:', err.message));
       unsubs.push(unsubUsers);
 
-      // 3. Chats / Notifications Listener (/chatState) - Sync threads & notifications only
-      // Do NOT overwrite orders or users from /chatState to prevent race conditions with dedicated /orders node
+      // 3. Chats / Notifications Listener (/chatState)
       const chatStateRef = ref(firebaseDatabase, 'chatState');
       const unsubChat = onValue(chatStateRef, (snapshot) => {
         const value = snapshot.val() as StoredChatState | null;
         if (value) {
           const parsedThreads = parseThreadsFromState(value.threads);
           const parsedNotifs = parseNotificationsFromState(value.notifications);
-          setThreads(parsedThreads);
-          setNotifications(parsedNotifs);
+          
+          setThreads((prev) => {
+            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+            const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
+            return prevStr === newStr ? prev : parsedThreads;
+          });
+
+          setNotifications((prev) => {
+            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+            const newStr = JSON.stringify(sanitizeForFirebase(parsedNotifs));
+            return prevStr === newStr ? prev : parsedNotifs;
+          });
+
           if (typeof value.notifCounter === 'number') {
-            setNotifCounter(value.notifCounter);
+            setNotifCounter((prev) => (prev === value.notifCounter ? prev : value.notifCounter!));
           }
         }
       }, (err) => console.warn('Firebase RTDB chatState sync:', err.message));
@@ -477,7 +519,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     };
   }, [applyStoredState]);
 
-  // ─── Sync changes to Firebase & localStorage ──────────────────────────────────
+  // ─── Sync changes to Firebase & localStorage (Debounced & Deduplicated) ────────
   useEffect(() => {
     const payload = sanitizeForFirebase({
       threads,
@@ -491,35 +533,31 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     lastSerializedStateRef.current = serialized;
 
-    // Update LocalStorage & BroadcastChannel immediately across tabs
-    try {
-      window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
-    } catch (e) {
-      console.warn('LocalStorage save failed:', e);
-    }
-    channelRef.current?.postMessage({
-      source: clientIdRef.current,
-      state: serialized,
-    });
-
-    // Write to dedicated Firebase Realtime Database nodes:
-    // /orders, /users, and /chatState
-    if (firebaseDatabase) {
+    const timer = setTimeout(() => {
+      // Update LocalStorage & BroadcastChannel
       try {
-        // Node 1: Orders (dedicated /orders node)
-        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(orders)).catch(() => {});
-
-        // Node 2: Users (dedicated /users node)
-        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(users)).catch(() => {});
-
-        // Node 3: Chat State & Threads (/chatState & /chats)
-        set(ref(firebaseDatabase, 'chatState'), payload).catch((err) => {
-          console.warn('Firebase RTDB write note (ensure Firebase Rules are set to read: true, write: true):', err.message || err);
-        });
+        window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
       } catch (e) {
-        console.error('Failed to save state to Firebase:', e);
+        console.warn('LocalStorage save failed:', e);
       }
-    }
+      channelRef.current?.postMessage({
+        source: clientIdRef.current,
+        state: serialized,
+      });
+
+      // Write to dedicated Firebase Realtime Database nodes
+      if (firebaseDatabase) {
+        try {
+          set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(orders)).catch(() => {});
+          set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(users)).catch(() => {});
+          set(ref(firebaseDatabase, 'chatState'), payload).catch(() => {});
+        } catch (e) {
+          console.error('Failed to save state to Firebase:', e);
+        }
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
   }, [threads, orders, users, notifications, notifCounter]);
 
   const ensureDesignerThread = useCallback((designerName: string, orderName?: string) => {
@@ -1019,11 +1057,29 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         return {
           ...t,
           messages: filteredMessages,
-          lastMessage: lastMsgObj ? lastMsgObj.text : '',
-          lastTime: lastMsgObj ? lastMsgObj.time : '',
         };
       })
     );
+  }, []);
+
+  const addUser = useCallback((newUser: User & { password?: string }) => {
+    setUsers((prev) => {
+      const updated = [newUser, ...prev.filter((u) => u.id !== newUser.id)];
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(updated)).catch(() => {});
+      }
+      return updated;
+    });
+  }, []);
+
+  const deleteUser = useCallback((userId: string) => {
+    setUsers((prev) => {
+      const updated = prev.filter((u) => u.id !== userId);
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(updated)).catch(() => {});
+      }
+      return updated;
+    });
   }, []);
 
   return (
@@ -1032,6 +1088,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         threads,
         orders,
         notifications,
+        users,
+        addUser,
+        deleteUser,
         sendCustomerMessage,
         sendDesignerMessage,
         sendAdminMessage,

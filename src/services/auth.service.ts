@@ -16,16 +16,34 @@ import { saveSession, getSession, clearSession } from '../utils/session';
 
 /**
  * Authenticates a user with username + password.
+ * Checks both persistent registered users and mock users.
  * Returns the User object on success, an error string on failure.
  */
 export async function authLogin(credentials: LoginCredentials): Promise<AuthResult> {
-  // Simulate async network delay (remove when using Supabase)
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  // Simulate async network delay
+  await new Promise((resolve) => setTimeout(resolve, 300));
 
-  const match = MOCK_USERS.find(
+  let allUsers: Array<any> = [...MOCK_USERS];
+
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem('dream-jewels-chat-state') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.users) {
+        const storedUsers = Array.isArray(parsed.users)
+          ? parsed.users
+          : Object.values(parsed.users);
+        allUsers = [...storedUsers, ...MOCK_USERS];
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read persistent users:', e);
+  }
+
+  const match = allUsers.find(
     (u) =>
-      u.username.toLowerCase() === credentials.username.toLowerCase() &&
-      u.password === credentials.password
+      u.username?.toLowerCase() === credentials.username.toLowerCase() &&
+      (u.password === credentials.password || (!u.password && credentials.password === '123456'))
   );
 
   if (!match) {

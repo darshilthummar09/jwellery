@@ -1,9 +1,8 @@
 import { FormEvent, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Check, Clock, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar } from 'lucide-react';
+import { Check, Clock, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar, Flame } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
-import { DetailCard } from '../../components/common/DetailCard';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Badge } from '../../components/common/Badge';
@@ -22,14 +21,38 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   Completed: 'bg-emerald-100 text-emerald-700',
 };
 
-const PRIORITY_VARIANT: Record<Order['priority'], 'danger' | 'warning' | 'muted'> = {
-  High: 'danger',
-  Medium: 'warning',
-  Low: 'muted',
+const PRIORITY_CONFIG: Record<Order['priority'], { label: string; sub: string; emoji: string; badgeClass: string; selectClass: string }> = {
+  High: {
+    label: 'High',
+    sub: 'Rush / Urgent',
+    emoji: '🔴',
+    badgeClass: 'bg-red-50 text-red-700 border-red-200',
+    selectClass: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
+  },
+  Medium: {
+    label: 'Medium',
+    sub: 'Standard',
+    emoji: '🟡',
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+    selectClass: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+  },
+  Low: {
+    label: 'Low',
+    sub: 'Flexible',
+    emoji: '🔵',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+    selectClass: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200',
+  },
 };
 
 function PriorityBadge({ priority }: { priority: Order['priority'] }) {
-  return <Badge variant={PRIORITY_VARIANT[priority]}>{priority}</Badge>;
+  const cfg = PRIORITY_CONFIG[priority || 'Medium'] || PRIORITY_CONFIG.Medium;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${cfg.badgeClass}`}>
+      <span>{cfg.emoji}</span>
+      <span>{cfg.label}</span>
+    </span>
+  );
 }
 
 function OrderThumb({ order, size = 'sm' }: { order: Order; size?: 'sm' | 'md' }) {
@@ -103,6 +126,32 @@ export function OrdersPage() {
     }
   }, [searchParams, orders, setSearchParams]);
 
+function normalizeDateToYMD(val?: string): string | null {
+  if (!val) return null;
+  const clean = val.trim();
+  if (!clean || clean === 'To be scheduled' || clean === '-') return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+
+  const parsed = new Date(clean.includes('T') ? clean : clean + ' 00:00:00');
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const fallback = new Date(clean);
+  if (!isNaN(fallback.getTime())) {
+    const y = fallback.getFullYear();
+    const m = String(fallback.getMonth() + 1).padStart(2, '0');
+    const d = String(fallback.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
+}
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (statusFilter !== 'All' && order.status !== statusFilter) return false;
@@ -128,23 +177,12 @@ export function OrdersPage() {
         if (!matchesId && !matchesName) return false;
       }
       if (dateFilter) {
-        const filterDateFormatted = new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        });
-        const createdDate = new Date(order.created);
-        const orderIso = !isNaN(createdDate.getTime()) ? createdDate.toISOString().split('T')[0] : '';
-        const matchesCreated =
-          order.created === dateFilter ||
-          order.created === filterDateFormatted ||
-          orderIso === dateFilter ||
-          order.created?.toLowerCase().includes(filterDateFormatted.toLowerCase());
-        const matchesDue =
-          order.due === dateFilter ||
-          order.due === filterDateFormatted ||
-          order.due?.toLowerCase().includes(filterDateFormatted.toLowerCase());
-        if (!matchesCreated && !matchesDue) return false;
+        const filterYMD = normalizeDateToYMD(dateFilter);
+        const createdYMD = normalizeDateToYMD(order.created);
+        const dueYMD = normalizeDateToYMD(order.due);
+
+        const matches = (filterYMD && (filterYMD === createdYMD || filterYMD === dueYMD));
+        if (!matches) return false;
       }
       return true;
     });
@@ -185,6 +223,14 @@ export function OrdersPage() {
     );
     setRejectingOrder(null);
     setRejectionReason('');
+  };
+
+  const handleUpdatePriority = (order: Order, newPriority: Order['priority']) => {
+    const updated = { ...order, priority: newPriority };
+    upsertOrder(updated);
+    if (selectedOrder && selectedOrder.id === order.id) {
+      setSelectedOrder(updated);
+    }
   };
 
   // Generate & Download PDF
@@ -299,28 +345,55 @@ export function OrdersPage() {
               <option value="Low">Low</option>
             </select>
 
-            {/* Single Date Picker (with visible label on iPhone Safari & all browsers) */}
+            {/* Single Date Picker (with native calendar and clear button) */}
             <div className="relative inline-flex items-center w-full sm:w-auto">
-              <div
-                className={`w-full sm:w-auto flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto pointer-events-none transition-all truncate ${
-                  dateFilter ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold' : 'border-slate-200 text-slate-700'
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    dateInputRef.current?.showPicker();
+                  } catch {
+                    dateInputRef.current?.focus();
+                  }
+                }}
+                className={`w-full sm:w-auto flex items-center justify-between gap-2 bg-slate-50 hover:bg-slate-100/80 border text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl px-2.5 sm:px-3.5 py-1.5 sm:py-2 h-8 sm:h-auto transition-all cursor-pointer truncate ${
+                  dateFilter
+                    ? 'border-emerald-300 text-emerald-800 bg-emerald-50/60 font-semibold'
+                    : 'border-slate-200 text-slate-700'
                 }`}
               >
-                <span className="truncate">
-                  {dateFilter
-                    ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'All Dates'}
-                </span>
-              </div>
+                <div className="flex items-center gap-1.5 truncate">
+                  <Calendar size={14} className={dateFilter ? 'text-emerald-600' : 'text-slate-400'} />
+                  <span className="truncate">
+                    {dateFilter
+                      ? new Date(dateFilter + 'T00:00:00').toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      : 'All Dates'}
+                  </span>
+                </div>
+                {dateFilter && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDateFilter('');
+                    }}
+                    className="p-0.5 hover:bg-emerald-200/60 text-emerald-700 rounded-full transition-colors cursor-pointer"
+                    title="Clear date filter"
+                  >
+                    <X size={12} />
+                  </span>
+                )}
+              </button>
               <input
+                ref={dateInputRef}
                 type="date"
                 value={dateFilter}
                 onChange={(event) => setDateFilter(event.target.value)}
                 aria-label="Filter by date"
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                className="absolute inset-0 opacity-0 w-full h-full pointer-events-none"
               />
             </div>
           </div>
@@ -353,7 +426,24 @@ export function OrdersPage() {
                       <td className="px-6 py-4 font-medium text-slate-800">{order.name}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.customerName}</td>
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.category}</td>
-                      <td className="px-6 py-4 whitespace-nowrap"><PriorityBadge priority={order.priority} /></td>
+                      <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={order.priority || 'Medium'}
+                          onChange={(e) => handleUpdatePriority(order, e.target.value as Order['priority'])}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border outline-none cursor-pointer transition-all ${
+                            order.priority === 'High'
+                              ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                              : order.priority === 'Medium'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                          title="Admin: Click to change priority"
+                        >
+                          <option value="High">🔴 High (Rush)</option>
+                          <option value="Medium">🟡 Medium (Standard)</option>
+                          <option value="Low">🔵 Low (Flexible)</option>
+                        </select>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[order.status]}`}>
                           {order.status}
@@ -488,10 +578,37 @@ export function OrdersPage() {
                   <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider mb-1">Wanted By Date</p>
                   <p className="text-sm font-bold text-emerald-900 truncate">{selectedOrder.due || selectedOrder.budget || 'To be scheduled'}</p>
                 </div>
-                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Priority</p>
-                  <div className="mt-0.5">
-                    <PriorityBadge priority={selectedOrder.priority} />
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <Flame size={11} className="text-amber-500" />
+                      Priority
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-medium">Set by Admin</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(['High', 'Medium', 'Low'] as Order['priority'][]).map((p) => {
+                      const isSelected = (selectedOrder.priority || 'Medium') === p;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => handleUpdatePriority(selectedOrder, p)}
+                          className={`flex-1 py-1 px-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer text-center ${
+                            isSelected
+                              ? p === 'High'
+                                ? 'bg-red-600 text-white border-red-700 shadow-xs'
+                                : p === 'Medium'
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                : 'bg-slate-700 text-white border-slate-800 shadow-xs'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title={`Set priority to ${p}`}
+                        >
+                          {p === 'High' ? '🔴 High' : p === 'Medium' ? '🟡 Med' : '🔵 Low'}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -722,11 +839,15 @@ export function OrdersPage() {
               </select>
             </label>
             <label className="text-sm font-medium text-slate-700">
-              Priority
-              <select value={editingOrder.priority} onChange={(event) => setEditingOrder({ ...editingOrder, priority: event.target.value as Order['priority'] })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400">
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
+              Priority (Admin Set)
+              <select
+                value={editingOrder.priority}
+                onChange={(event) => setEditingOrder({ ...editingOrder, priority: event.target.value as Order['priority'] })}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 cursor-pointer"
+              >
+                <option value="High">🔴 High (Rush / Urgent)</option>
+                <option value="Medium">🟡 Medium (Standard Production)</option>
+                <option value="Low">🔵 Low (Flexible Timeline)</option>
               </select>
             </label>
             <label className="sm:col-span-2 text-sm font-medium text-slate-700">
