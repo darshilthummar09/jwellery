@@ -1,16 +1,17 @@
 import { FormEvent, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Check, Clock, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar, Flame } from 'lucide-react';
+import { Check, Clock, X, Image as ImageIcon, FileDown, Share2, FileText, ExternalLink, Download, ChevronDown, Calendar, Flame, MessageSquare, Send, Paperclip } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Badge } from '../../components/common/Badge';
-import { Order, OrderStatus, useChatNotification } from '../../context/ChatNotificationContext';
+import { Order, OrderStatus, ChatAttachment, useChatNotification } from '../../context/ChatNotificationContext';
 import { useAuth } from '../../hooks/useAuth';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
 import { generateOrderPdf, downloadOrderPdf } from '../../utils/orderPdf';
+import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
   'Pending Approval': 'bg-orange-100 text-orange-700',
@@ -71,14 +72,19 @@ export function OrdersPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { orders, upsertOrder, approveOrder, rejectOrder, deleteOrder } = useChatNotification();
+  const { orders, threads, upsertOrder, approveOrder, rejectOrder, deleteOrder, sendAdminMessage, markThreadRead, deleteMessage } = useChatNotification();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
+  const [chatOrder, setChatOrder] = useState<Order | null>(null);
+  const [chatInput, setChatInput] = useState('');
+  const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   const [rejectionReason, setRejectionReason] = useState('');
   const [pdfBusyOrderId, setPdfBusyOrderId] = useState<string | null>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter, setStatusFilter] = useState<'All' | OrderStatus>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | Order['priority']>('All');
   const [dateFilter, setDateFilter] = useState('');
@@ -416,115 +422,172 @@ function normalizeDateToYMD(val?: string): string | null {
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Status</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Wanted By</th>
                     <th className="text-left px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Date</th>
+                    <th className="text-center px-4 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Chat</th>
                     <th className="text-right px-6 py-3.5 font-medium text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {filteredOrders.map((order) => (
-                    <tr key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
-                      <td className="px-6 py-4"><OrderThumb order={order} /></td>
-                      <td className="px-6 py-4 font-medium text-slate-800">{order.name}</td>
-                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.customerName}</td>
-                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.category}</td>
-                      <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={order.priority || 'Medium'}
-                          onChange={(e) => handleUpdatePriority(order, e.target.value as Order['priority'])}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border outline-none cursor-pointer transition-all ${
-                            order.priority === 'High'
-                              ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                              : order.priority === 'Medium'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                          }`}
-                          title="Admin: Click to change priority"
-                        >
-                          <option value="High">🔴 High (Rush)</option>
-                          <option value="Medium">🟡 Medium (Standard)</option>
-                          <option value="Low">🔵 Low (Flexible)</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[order.status]}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">{order.due || order.created || '-'}</td>
-                      <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <Clock size={12} className="text-slate-300 flex-shrink-0" />
-                          {order.created}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {order.status === 'Pending Approval' ? (
-                          <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
-                            <button onClick={() => handleApproveOrder(order)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
-                              <Check size={13} /> Accept
-                            </button>
-                            <button onClick={() => setRejectingOrder(order)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
-                              <X size={13} /> Reject
-                            </button>
+                  {filteredOrders.map((order) => {
+                    const orderThread = threads.find((t) => t.id === `order-${order.id}` || t.orderId === order.id);
+                    const unreadCount = orderThread?.unread || 0;
+
+                    return (
+                      <tr key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-slate-50/60 transition-colors cursor-pointer">
+                        <td className="px-6 py-4"><OrderThumb order={order} /></td>
+                        <td className="px-6 py-4 font-medium text-slate-800">{order.name}</td>
+                        <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.customerName}</td>
+                        <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{order.category}</td>
+                        <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={order.priority || 'Medium'}
+                            onChange={(e) => handleUpdatePriority(order, e.target.value as Order['priority'])}
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-full border outline-none cursor-pointer transition-all ${
+                              order.priority === 'High'
+                                ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                : order.priority === 'Medium'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                            }`}
+                            title="Admin: Click to change priority"
+                          >
+                            <option value="High">🔴 High (Rush)</option>
+                            <option value="Medium">🟡 Medium (Standard)</option>
+                            <option value="Low">🔵 Low (Flexible)</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[order.status]}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-slate-700 whitespace-nowrap">{order.due || order.created || '-'}</td>
+                        <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={12} className="text-slate-300 flex-shrink-0" />
+                            {order.created}
                           </div>
-                        ) : (
-                          <span className="block text-right text-xs text-slate-300">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        {/* Order-Wise Chat Column */}
+                        <td className="px-4 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChatOrder(order);
+                              setChatInput('');
+                              setChatAttachments([]);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                              unreadCount > 0
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-200 hover:bg-emerald-700'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-2xs'
+                            }`}
+                            title={`Order-wise chat for ${order.name}`}
+                          >
+                            <MessageSquare size={13} />
+                            <span>Chat</span>
+                            {unreadCount > 0 && (
+                              <span className="ml-0.5 px-1.5 py-0.2 bg-white text-emerald-700 font-bold rounded-full text-[10px]">
+                                {unreadCount}
+                              </span>
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {order.status === 'Pending Approval' ? (
+                            <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                              <button onClick={() => handleApproveOrder(order)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
+                                <Check size={13} /> Accept
+                              </button>
+                              <button onClick={() => setRejectingOrder(order)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap">
+                                <X size={13} /> Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="block text-right text-xs text-slate-300">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile card list */}
             <div className="md:hidden divide-y divide-slate-50">
-              {filteredOrders.map((order) => (
-                <div
-                  key={order.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedOrder(order)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      setSelectedOrder(order);
-                    }
-                  }}
-                  className="w-full text-left px-4 py-4 active:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <div className="flex gap-3">
-                    <OrderThumb order={order} size="md" />
-                    <div className="flex-1 min-w-0">
-                      <div className="mb-1.5">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[order.status]}`}>
-                          {order.status}
-                        </span>
-                      </div>
-                      <p className="font-semibold text-slate-800 text-sm mb-1">{order.name}</p>
-                      <p className="text-xs text-slate-500 mb-2">{order.customerName} · {order.category}</p>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <PriorityBadge priority={order.priority} />
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <Clock size={11} /> {order.created}
+              {filteredOrders.map((order) => {
+                const orderThread = threads.find((t) => t.id === `order-${order.id}` || t.orderId === order.id);
+                const unreadCount = orderThread?.unread || 0;
+
+                return (
+                  <div
+                    key={order.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedOrder(order)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedOrder(order);
+                      }
+                    }}
+                    className="w-full text-left px-4 py-4 active:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex gap-3">
+                      <OrderThumb order={order} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <div className="mb-1.5">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${STATUS_COLORS[order.status]}`}>
+                            {order.status}
                           </span>
                         </div>
-                        <span className="font-semibold text-slate-700 text-xs">{order.due || order.created}</span>
+                        <p className="font-semibold text-slate-800 text-sm mb-1">{order.name}</p>
+                        <p className="text-xs text-slate-500 mb-2">{order.customerName} · {order.category}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <PriorityBadge priority={order.priority} />
+                            <span className="flex items-center gap-1 text-xs text-slate-400">
+                              <Clock size={11} /> {order.created}
+                            </span>
+                          </div>
+                          <span className="font-semibold text-slate-700 text-xs">{order.due || order.created}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {order.status === 'Pending Approval' && (
-                    <div className="flex gap-2 mt-3" onClick={(event) => event.stopPropagation()}>
-                      <button onClick={() => handleApproveOrder(order)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors">
-                        <Check size={13} /> Accept
+
+                    <div className="flex items-center gap-2 mt-3" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChatOrder(order);
+                          setChatInput('');
+                          setChatAttachments([]);
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-lg transition-colors flex-1"
+                      >
+                        <MessageSquare size={13} />
+                        <span>Order Chat</span>
+                        {unreadCount > 0 && (
+                          <span className="px-1.5 py-0.2 bg-emerald-600 text-white font-bold rounded-full text-[10px]">
+                            {unreadCount}
+                          </span>
+                        )}
                       </button>
-                      <button onClick={() => setRejectingOrder(order)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-lg transition-colors">
-                        <X size={13} /> Reject
-                      </button>
+
+                      {order.status === 'Pending Approval' && (
+                        <>
+                          <button onClick={() => handleApproveOrder(order)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors">
+                            <Check size={13} /> Accept
+                          </button>
+                          <button onClick={() => setRejectingOrder(order)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-100 text-xs font-semibold rounded-lg transition-colors">
+                            <X size={13} /> Reject
+                          </button>
+                        </>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
@@ -755,6 +818,18 @@ function normalizeDateToYMD(val?: string): string | null {
                   </>
                 )}
                 <button
+                  onClick={() => {
+                    setChatOrder(selectedOrder);
+                    setChatInput('');
+                    setChatAttachments([]);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-xl transition-all shadow-2xs cursor-pointer"
+                  title="Open order-wise chat for this order"
+                >
+                  <MessageSquare size={14} />
+                  <span>Order Chat</span>
+                </button>
+                <button
                   onClick={() => setEditingOrder(selectedOrder)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                 >
@@ -795,26 +870,276 @@ function normalizeDateToYMD(val?: string): string | null {
         </div>
       )}
 
-      {editingOrder && (
-        <Modal title="Edit Order" onClose={() => setEditingOrder(null)}>
-          <form onSubmit={saveOrder} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              ['Order Name', 'name'],
-              ['Customer', 'customerName'],
-              ['Category', 'category'],
-              ['Due Date', 'due'],
-              ['Progress', 'progress'],
-            ].map(([label, key]) => (
-              <label key={key} className="text-sm font-medium text-slate-700">
-                {label}
+      {/* ─── Dedicated Order-Wise Chat Modal ─── */}
+      {chatOrder && (() => {
+        const orderThread = threads.find((t) => t.id === `order-${chatOrder.id}` || t.orderId === chatOrder.id);
+        const messages = orderThread?.messages || [];
+
+        const handleSendOrderMsg = () => {
+          if (!chatInput.trim() && chatAttachments.length === 0) return;
+          const threadId = `order-${chatOrder.id}`;
+          sendAdminMessage(threadId, chatInput.trim(), chatAttachments);
+          setChatInput('');
+          setChatAttachments([]);
+        };
+
+        const handleChatFiles = async (files: FileList | null) => {
+          if (!files?.length) return;
+          const incoming: ChatAttachment[] = await Promise.all(
+            Array.from(files).map(async (file, index) => {
+              const isImage = file.type.startsWith('image/');
+              const isVideo = file.type.startsWith('video/');
+              const { url, size } = isImage
+                ? await compressImageFile(file).then((r) => ({ url: r.dataUrl, size: r.size }))
+                : { url: await readFileAsDataUrl(file), size: file.size };
+
+              return {
+                id: Date.now() + index,
+                name: file.name,
+                size,
+                type: isImage ? 'image/jpeg' : file.type || 'application/octet-stream',
+                url,
+                kind: (isImage ? 'image' : isVideo ? 'video' : 'file') as ChatAttachment['kind'],
+              };
+            })
+          );
+          setChatAttachments((prev) => [...prev, ...incoming]);
+          if (chatFileInputRef.current) chatFileInputRef.current.value = '';
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setChatOrder(null)}
+          >
+            <div
+              className="w-full max-w-2xl bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+              style={{ height: '85vh', maxHeight: '720px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold flex-shrink-0">
+                    <MessageSquare size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate">
+                        Order Chat: {chatOrder.name}
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_COLORS[chatOrder.status]}`}>
+                        {chatOrder.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">
+                      Client: <span className="font-semibold text-slate-700">{chatOrder.customerName}</span> · ID: <span className="font-mono text-slate-600">{chatOrder.id}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => navigate(`/dashboard/admin/chats?thread=order-${chatOrder.id}`)}
+                    className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors cursor-pointer"
+                    title="Open full page chat"
+                  >
+                    <ExternalLink size={13} />
+                    <span>Full Chat</span>
+                  </button>
+                  <button
+                    onClick={() => setChatOrder(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Order Context Ribbon */}
+              <div className="px-5 py-2.5 bg-emerald-50/70 border-b border-emerald-100/60 flex items-center justify-between text-xs text-emerald-950 flex-shrink-0">
+                <div className="flex items-center gap-3 overflow-x-auto">
+                  <span className="font-semibold">Category: {chatOrder.category}</span>
+                  <span>·</span>
+                  <span>Metal: {chatOrder.metal} ({chatOrder.karat})</span>
+                  <span>·</span>
+                  <span>Budget: {chatOrder.budget}</span>
+                </div>
+              </div>
+
+              {/* Message Feed */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3.5 bg-slate-50/40">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3">
+                      <MessageSquare size={22} />
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-sm">No messages yet for this order</h4>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                      Send a message to {chatOrder.customerName} regarding their custom order specifications.
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isAdmin = msg.from === 'admin';
+                    const isOrderCard =
+                      msg.text.startsWith('ORDER DETAILS') ||
+                      msg.text.includes('ORDER DETAILS') ||
+                      msg.text.startsWith('📋 ORDER DETAILS');
+
+                    if (isOrderCard) {
+                      return (
+                        <div key={msg.id} className="p-3.5 bg-white border border-slate-200 rounded-2xl shadow-2xs text-xs space-y-1.5">
+                          <div className="font-bold text-emerald-800 flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
+                            <span>📋 Order Specifications</span>
+                          </div>
+                          <p className="whitespace-pre-wrap text-slate-700 font-mono text-[11px]">{msg.text}</p>
+                          <span className="text-[10px] text-slate-400 block pt-1">{msg.time}</span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col gap-1 ${isAdmin ? 'items-end' : 'items-start'}`}
+                      >
+                        <span className="text-[10px] text-slate-400 px-1 font-medium">
+                          {isAdmin ? 'You (Admin)' : msg.senderName || chatOrder.customerName}
+                        </span>
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                            isAdmin
+                              ? 'bg-emerald-600 text-white rounded-br-xs'
+                              : 'bg-white border border-slate-200/80 text-slate-800 rounded-bl-xs shadow-2xs'
+                          }`}
+                        >
+                          {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+                          {msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {msg.attachments.map((att) => (
+                                <div key={att.id}>
+                                  {att.kind === 'image' ? (
+                                    <img src={att.url} alt={att.name} className="max-h-40 rounded-xl object-cover" />
+                                  ) : (
+                                    <a
+                                      href={att.url}
+                                      download={att.name}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
+                                        isAdmin ? 'bg-emerald-700/60 text-white' : 'bg-slate-100 text-slate-700'
+                                      }`}
+                                    >
+                                      <FileText size={14} />
+                                      <span className="truncate">{att.name}</span>
+                                    </a>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 px-1">{msg.time}</span>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatMessagesEndRef} />
+              </div>
+
+              {/* Pending Attachments */}
+              {chatAttachments.length > 0 && (
+                <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2 overflow-x-auto flex-shrink-0">
+                  {chatAttachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 shadow-2xs flex-shrink-0"
+                    >
+                      {att.kind === 'image' ? (
+                        <img src={att.url} alt={att.name} className="w-5 h-5 rounded object-cover" />
+                      ) : (
+                        <FileText size={14} className="text-emerald-600" />
+                      )}
+                      <span className="max-w-[120px] truncate">{att.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setChatAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+                        className="text-slate-400 hover:text-red-500 p-0.5 rounded cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Chat Input Footer */}
+              <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-white flex items-center gap-2 flex-shrink-0">
                 <input
-                  required={key !== 'due'}
-                  value={String(editingOrder[key as keyof Order] ?? '')}
-                  onChange={(event) => setEditingOrder({ ...editingOrder, [key]: event.target.value })}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  type="file"
+                  ref={chatFileInputRef}
+                  onChange={(e) => handleChatFiles(e.target.files)}
+                  multiple
+                  accept="image/*,video/*,application/pdf,.pdf,.doc,.docx"
+                  className="hidden"
                 />
-              </label>
-            ))}
+                <button
+                  type="button"
+                  onClick={() => chatFileInputRef.current?.click()}
+                  className="w-10 h-10 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
+                  title="Attach files or sketches"
+                >
+                  <Paperclip size={17} />
+                </button>
+
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendOrderMsg()}
+                  placeholder={`Message ${chatOrder.customerName} regarding this order...`}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 outline-none focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendOrderMsg}
+                  disabled={!chatInput.trim() && chatAttachments.length === 0}
+                  className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex-shrink-0 cursor-pointer"
+                >
+                  <Send size={15} />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {editingOrder && (
+        <Modal title="Edit Order" subtitle={editingOrder.name} onClose={() => setEditingOrder(null)}>
+          <form onSubmit={handleUpdateOrder} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="sm:col-span-2 text-sm font-medium text-slate-700">
+              Order Name
+              <input value={editingOrder.name} onChange={(event) => setEditingOrder({ ...editingOrder, name: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400" />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Customer Name
+              <input value={editingOrder.customerName} onChange={(event) => setEditingOrder({ ...editingOrder, customerName: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400" />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Budget
+              <input value={editingOrder.budget} onChange={(event) => setEditingOrder({ ...editingOrder, budget: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400" />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Wanted By Date
+              <input
+                type="date"
+                value={normalizeDateToYMD(editingOrder.due) || ''}
+                onChange={(event) => setEditingOrder({ ...editingOrder, due: event.target.value })}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400"
+              />
+            </label>
             <label className="text-sm font-medium text-slate-700">
               Metal
               <select value={editingOrder.metal} onChange={(event) => setEditingOrder({ ...editingOrder, metal: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-emerald-400">

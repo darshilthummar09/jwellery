@@ -146,8 +146,10 @@ export function ChatsPage() {
   useEffect(() => {
     if (requestedThreadId && threads.some((thread) => thread.id === requestedThreadId)) {
       setSelectedThreadId(requestedThreadId);
+    } else if (!selectedThreadId && threads.length > 0) {
+      setSelectedThreadId(threads[0].id);
     }
-  }, [requestedThreadId, threads]);
+  }, [requestedThreadId, threads, selectedThreadId]);
 
   useEffect(() => {
     if (selectedThreadId) {

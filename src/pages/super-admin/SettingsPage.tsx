@@ -31,6 +31,7 @@ export function SettingsPage() {
   const {
     getUnreadCount,
     triggerTestNotification,
+    seedOrderTestChats,
     clearAllNotifications,
     enablePushNotifications,
     pushPermission,
@@ -357,6 +358,30 @@ export function SettingsPage() {
                   OS Banner
                 </button>
               </div>
+            </div>
+
+            {/* 7. Seed Order-Wise Test Chats */}
+            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-all flex flex-col justify-between sm:col-span-2 lg:col-span-3">
+              <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                <div className="flex items-center gap-2 font-semibold text-sm text-emerald-950">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Seed Order-Wise Test Chats & Sync to Firebase
+                </div>
+                <span className="text-[11px] font-medium text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">
+                  Instant Database Initialization
+                </span>
+              </div>
+              <p className="text-xs text-emerald-800 mb-3 leading-relaxed">
+                Initializes 4 realistic order-wise conversations (Solitaire Ring, Kundan Choker, Tennis Bracelet, Temple Earrings) with complete customer & admin dialogues, order spec cards, and syncs history directly to Firebase Realtime Database.
+              </p>
+              <button
+                type="button"
+                onClick={() => seedOrderTestChats()}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Sparkles size={14} />
+                <span>Initialize & Sync 4 Order-Wise Test Chats</span>
+              </button>
             </div>
           </div>
         </div>

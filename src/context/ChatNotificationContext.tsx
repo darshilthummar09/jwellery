@@ -148,6 +148,7 @@ interface ChatNotificationContextValue {
   triggerTestNotification: (
     type: 'order_created' | 'order_approved' | 'order_rejected' | 'order_progress' | 'chat_message' | 'system_alert'
   ) => void;
+  seedOrderTestChats: () => void;
   deleteMessage: (threadId: string, messageId: number) => void;
   enablePushNotifications: (userId?: string) => Promise<{ success: boolean; error?: string }>;
   pushPermission: NotificationPermission | 'unsupported';
@@ -164,8 +165,494 @@ const CHAT_CHANNEL_NAME = 'dream-jewels-live-chat';
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
 
-const INITIAL_THREADS: ChatThread[] = [];
-const INITIAL_ORDERS: Order[] = [];
+export const INITIAL_ORDERS: Order[] = [
+  {
+    id: 'ORD-101',
+    name: 'Custom Solitaire Diamond Ring',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    designerName: 'Riya Sharma',
+    status: 'Approved',
+    due: 'Aug 28, 2026',
+    budget: '₹85,000',
+    priority: 'High',
+    category: 'Rings',
+    metal: 'Yellow Gold',
+    karat: '18 KT',
+    size: '14',
+    weight: '4.2g',
+    notes: '1.25ct oval cut center diamond, 4-prong setting with cathedral shoulders.',
+    image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 23, 2026',
+    progress: '75%',
+  },
+  {
+    id: 'ORD-102',
+    name: 'Emerald & Gold Royal Choker',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    designerName: 'Riya Sharma',
+    status: 'Pending Approval',
+    due: 'Sep 05, 2026',
+    budget: '₹3,20,000',
+    priority: 'Medium',
+    category: 'Necklaces',
+    metal: 'Yellow Gold',
+    karat: '22 KT',
+    weight: '48g',
+    notes: 'Traditional bridal choker with genuine Zambian emerald drops and uncut polki diamonds.',
+    image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 23, 2026',
+    progress: '0%',
+  },
+  {
+    id: 'ORD-103',
+    name: 'Diamond Tennis Bracelet',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    designerName: 'Riya Sharma',
+    status: 'Approved',
+    due: 'Sep 12, 2026',
+    budget: '₹1,50,000',
+    priority: 'High',
+    category: 'Bracelets',
+    metal: 'White Gold',
+    karat: '18 KT',
+    size: '7 inches',
+    weight: '12.4g',
+    notes: '3.5 TCW round brilliant diamonds, four-prong basket setting with double safety lock.',
+    image: 'https://images.unsplash.com/photo-1611591475825-79a957e0797f?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 22, 2026',
+    progress: '60%',
+  },
+  {
+    id: 'ORD-104',
+    name: 'Pear-Cut Sapphire Drop Earrings',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    designerName: 'Riya Sharma',
+    status: 'In Progress',
+    due: 'Aug 28, 2026',
+    budget: '₹1,10,000',
+    priority: 'Medium',
+    category: 'Earrings',
+    metal: 'Platinum',
+    karat: '950 Platinum',
+    weight: '8.2g',
+    notes: 'Deep Ceylon blue sapphires surrounded by micro-halo diamonds with secure leverback clasp.',
+    image: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 21, 2026',
+    progress: '50%',
+  },
+  {
+    id: 'ORD-105',
+    name: 'Custom Nameplate Gold Pendant',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    designerName: 'Riya Sharma',
+    status: 'Review',
+    due: 'Aug 30, 2026',
+    budget: '₹45,000',
+    priority: 'Low',
+    category: 'Pendants',
+    metal: 'Yellow Gold',
+    karat: '18 KT',
+    weight: '5.1g',
+    notes: 'Script typography with diamond accent on the dot of the letter i.',
+    image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 20, 2026',
+    progress: '85%',
+  },
+  {
+    id: 'ORD-106',
+    name: 'Vintage Filigree Bridal Kada Bangle',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    designerName: 'Riya Sharma',
+    status: 'Completed',
+    due: 'Aug 15, 2026',
+    budget: '₹1,95,000',
+    priority: 'High',
+    category: 'Bangles',
+    metal: 'Yellow Gold',
+    karat: '22 KT',
+    size: '2.6',
+    weight: '32.5g',
+    notes: 'Antique matte finish with intricate jaali filigree work and screw hinge.',
+    image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 10, 2026',
+    progress: '100%',
+  },
+  {
+    id: 'ORD-107',
+    name: "Men's Matte Onyx Signet Ring",
+    customerId: 'usr_customer_002',
+    customerName: 'Aarav Shah',
+    designerName: 'Riya Sharma',
+    status: 'Pending Approval',
+    due: 'Sep 02, 2026',
+    budget: '₹62,000',
+    priority: 'Medium',
+    category: 'Rings',
+    metal: 'Yellow Gold',
+    karat: '18 KT',
+    size: '22',
+    weight: '10.2g',
+    notes: 'Hexagonal flat-top natural black onyx stone with brushed satin gold finish.',
+    image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 23, 2026',
+    progress: '0%',
+  },
+  {
+    id: 'ORD-108',
+    name: 'Cuban Link Gold Chain',
+    customerId: 'usr_customer_002',
+    customerName: 'Aarav Shah',
+    designerName: 'Riya Sharma',
+    status: 'In Progress',
+    due: 'Sep 10, 2026',
+    budget: '₹2,10,000',
+    priority: 'High',
+    category: 'Chains',
+    metal: 'Yellow Gold',
+    karat: '22 KT',
+    size: '22 inches',
+    weight: '42g',
+    notes: 'Solid 6mm flat diamond-cut cuban links with custom box clasp.',
+    image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=800&q=80',
+    created: 'Aug 22, 2026',
+    progress: '40%',
+  },
+];
+
+export const INITIAL_THREADS: ChatThread[] = [
+  {
+    id: 'order-ORD-101',
+    orderId: 'ORD-101',
+    orderName: 'Custom Solitaire Diamond Ring',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'Your 3D CAD renders are ready! The 1.25ct oval diamond in 18K Yellow Gold is moving to casting.',
+    lastTime: 'Aug 23, 03:30 PM',
+    messages: [
+      {
+        id: 101001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Custom Solitaire Diamond Ring\n──────────────────────────\n👤 Customer   : Priya Patel\n💍 Category   : Rings\n⚙️  Metal      : Yellow Gold (18 KT)\n📏 Size       : No. 14\n⚖️  Weight     : 4.2g\n💰 Budget     : ₹85,000\n📅 Target Date: Aug 28, 2026\n📝 Notes      : 1.25ct oval cut center diamond, 4-prong setting with cathedral shoulders.\n──────────────────────────\n🔖 Status     : Approved (75% Progress)`,
+        time: 'Aug 23, 10:00 AM',
+      },
+      {
+        id: 101002,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'Hi team! Could you confirm if the oval center diamond is eye-clean with excellent symmetry?',
+        time: 'Aug 23, 10:30 AM',
+      },
+      {
+        id: 101003,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'Hello Priya! Yes, our gemologist hand-selected an eye-clean VS1 oval diamond with ideal proportions to maximize brilliance and fire. Prongs are being micro-claw set in 18K Yellow Gold.',
+        time: 'Aug 23, 11:15 AM',
+      },
+      {
+        id: 101004,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'Wonderful! Can I get an update on the delivery schedule for Mumbai?',
+        time: 'Aug 23, 02:45 PM',
+      },
+      {
+        id: 101005,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'Your 3D CAD renders are ready! The 1.25ct oval diamond in 18K Yellow Gold is moving to casting. Estimated dispatch by Aug 28 with tamper-evident insured delivery.',
+        time: 'Aug 23, 03:30 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-102',
+    orderId: 'ORD-102',
+    orderName: 'Emerald & Gold Royal Choker',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 1,
+    customerUnread: 0,
+    lastMessage: 'Can we adjust the necklace length by 0.5 inches?',
+    lastTime: 'Aug 23, 12:40 PM',
+    messages: [
+      {
+        id: 102001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Emerald & Gold Royal Choker\n──────────────────────────\n👤 Customer   : Priya Patel\n💍 Category   : Necklaces\n⚙️  Metal      : Yellow Gold (22 KT)\n⚖️  Weight     : 48g\n💰 Budget     : ₹3,20,000\n📅 Target Date: Sep 05, 2026\n📝 Notes      : Traditional bridal choker with genuine Zambian emerald drops and uncut polki diamonds.\n──────────────────────────\n🔖 Status     : Pending Approval`,
+        time: 'Aug 23, 11:00 AM',
+      },
+      {
+        id: 102002,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'Hello! I submitted this order for my sister wedding in September. Can we adjust the necklace length by 0.5 inches?',
+        time: 'Aug 23, 12:40 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-103',
+    orderId: 'ORD-103',
+    orderName: 'Diamond Tennis Bracelet',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'The double safety clasp with hidden security tongue is being hand-fitted right now.',
+    lastTime: 'Aug 22, 05:00 PM',
+    messages: [
+      {
+        id: 103001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Diamond Tennis Bracelet\n──────────────────────────\n👤 Customer   : Priya Patel\n💍 Category   : Bracelets\n⚙️  Metal      : White Gold (18 KT)\n📏 Size       : 7 inches\n⚖️  Weight     : 12.4g\n💰 Budget     : ₹1,50,000\n📅 Target Date: Sep 12, 2026\n📝 Notes      : 3.5 TCW round brilliant diamonds, four-prong basket setting with double safety lock.\n──────────────────────────\n🔖 Status     : Approved (60% Progress)`,
+        time: 'Aug 22, 02:00 PM',
+      },
+      {
+        id: 103002,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'Please confirm that all diamonds are uniform in size and color.',
+        time: 'Aug 22, 03:15 PM',
+      },
+      {
+        id: 103003,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'The double safety clasp with hidden security tongue is being hand-fitted right now. All 48 diamonds are calibrated to 2.4mm each with GH color & VS clarity.',
+        time: 'Aug 22, 05:00 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-104',
+    orderId: 'ORD-104',
+    orderName: 'Pear-Cut Sapphire Drop Earrings',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'Both Ceylon sapphires have been set into the Platinum 950 bezels.',
+    lastTime: 'Aug 21, 04:30 PM',
+    messages: [
+      {
+        id: 104001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Pear-Cut Sapphire Drop Earrings\n──────────────────────────\n👤 Customer   : Priya Patel\n💍 Category   : Earrings\n⚙️  Metal      : Platinum (950 Platinum)\n⚖️  Weight     : 8.2g\n💰 Budget     : ₹1,10,000\n📅 Target Date: Aug 28, 2026\n📝 Notes      : Deep Ceylon blue sapphires surrounded by micro-halo diamonds with secure leverback clasp.\n──────────────────────────\n🔖 Status     : In Progress (50% Progress)`,
+        time: 'Aug 21, 11:30 AM',
+      },
+      {
+        id: 104002,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'Hello! I love the Ceylon sapphire color tone. Could you confirm the earrings have secure leverbacks?',
+        time: 'Aug 21, 01:20 PM',
+      },
+      {
+        id: 104003,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'Both Ceylon sapphires have been set into the Platinum 950 bezels with handcrafted leverback clasps for maximum comfort and security.',
+        time: 'Aug 21, 04:30 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-105',
+    orderId: 'ORD-105',
+    orderName: 'Custom Nameplate Gold Pendant',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'Vector lettering proof approved. High-gloss diamond-cut beveling underway.',
+    lastTime: 'Aug 20, 06:15 PM',
+    messages: [
+      {
+        id: 105001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Custom Nameplate Gold Pendant\n──────────────────────────\n👤 Customer   : Priya Patel\n💍 Category   : Pendants\n⚙️  Metal      : Yellow Gold (18 KT)\n⚖️  Weight     : 5.1g\n💰 Budget     : ₹45,000\n📅 Target Date: Aug 30, 2026\n📝 Notes      : Script typography with diamond accent on the dot of the letter i.\n──────────────────────────\n🔖 Status     : Review (85% Progress)`,
+        time: 'Aug 20, 02:00 PM',
+      },
+      {
+        id: 105002,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'The script font layout looks stunning! Please ensure the chain loop accommodates a 2mm chain.',
+        time: 'Aug 20, 04:10 PM',
+      },
+      {
+        id: 105003,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'Vector lettering proof approved. High-gloss diamond-cut beveling underway with a 3mm hidden bail.',
+        time: 'Aug 20, 06:15 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-106',
+    orderId: 'ORD-106',
+    orderName: 'Vintage Filigree Bridal Kada Bangle',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'Order completed and ready for pickup / delivery with 100% BIS hallmark certification.',
+    lastTime: 'Aug 15, 01:00 PM',
+    messages: [
+      {
+        id: 106001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Vintage Filigree Bridal Kada Bangle\n──────────────────────────\n👤 Customer   : Priya Patel\n💍 Category   : Bangles\n⚙️  Metal      : Yellow Gold (22 KT)\n📏 Size       : 2.6\n⚖️  Weight     : 32.5g\n💰 Budget     : ₹1,95,000\n📅 Target Date: Aug 15, 2026\n📝 Notes      : Antique matte finish with intricate jaali filigree work and screw hinge.\n──────────────────────────\n🔖 Status     : Completed (100% Progress)`,
+        time: 'Aug 10, 10:00 AM',
+      },
+      {
+        id: 106002,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'Order completed and ready for pickup / delivery with 100% BIS hallmark certification.',
+        time: 'Aug 15, 01:00 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-107',
+    orderId: 'ORD-107',
+    orderName: "Men's Matte Onyx Signet Ring",
+    customerId: 'usr_customer_002',
+    customerName: 'Aarav Shah',
+    participantRole: 'customer',
+    unread: 1,
+    customerUnread: 0,
+    lastMessage: 'Can we engrave my initials AS on the inside shank?',
+    lastTime: 'Aug 23, 01:10 PM',
+    messages: [
+      {
+        id: 107001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Men's Matte Onyx Signet Ring\n──────────────────────────\n👤 Customer   : Aarav Shah\n💍 Category   : Rings\n⚙️  Metal      : Yellow Gold (18 KT)\n📏 Size       : 22\n⚖️  Weight     : 10.2g\n💰 Budget     : ₹62,000\n📅 Target Date: Sep 02, 2026\n📝 Notes      : Hexagonal flat-top natural black onyx stone with brushed satin gold finish.\n──────────────────────────\n🔖 Status     : Pending Approval`,
+        time: 'Aug 23, 11:30 AM',
+      },
+      {
+        id: 107002,
+        from: 'customer',
+        senderName: 'Aarav Shah',
+        text: 'Hi, can we engrave my initials AS in Roman serif font on the inside shank?',
+        time: 'Aug 23, 01:10 PM',
+      },
+    ],
+  },
+  {
+    id: 'order-ORD-108',
+    orderId: 'ORD-108',
+    orderName: 'Cuban Link Gold Chain',
+    customerId: 'usr_customer_002',
+    customerName: 'Aarav Shah',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'Solid 6mm hand-assembled links passing through final diamond-cutting lathe.',
+    lastTime: 'Aug 22, 06:20 PM',
+    messages: [
+      {
+        id: 108001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: `📋 ORDER DETAILS — Cuban Link Gold Chain\n──────────────────────────\n👤 Customer   : Aarav Shah\n💍 Category   : Chains\n⚙️  Metal      : Yellow Gold (22 KT)\n📏 Size       : 22 inches\n⚖️  Weight     : 42g\n💰 Budget     : ₹2,10,000\n📅 Target Date: Sep 10, 2026\n📝 Notes      : Solid 6mm flat diamond-cut cuban links with custom box clasp.\n──────────────────────────\n🔖 Status     : In Progress (40% Progress)`,
+        time: 'Aug 22, 10:15 AM',
+      },
+      {
+        id: 108002,
+        from: 'customer',
+        senderName: 'Aarav Shah',
+        text: 'Please ensure the box clasp has double side safety latches.',
+        time: 'Aug 22, 02:30 PM',
+      },
+      {
+        id: 108003,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'Solid 6mm hand-assembled links passing through final diamond-cutting lathe with custom double-latch box clasp.',
+        time: 'Aug 22, 06:20 PM',
+      },
+    ],
+  },
+  {
+    id: 'customer-usr_customer_001',
+    customerId: 'usr_customer_001',
+    customerName: 'Priya Patel',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'We would love to help craft bespoke pieces for your bridal trousseau!',
+    lastTime: 'Aug 19, 11:00 AM',
+    messages: [
+      {
+        id: 100001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: '👋 Welcome to Dream Jewels, Priya! How can our master jewelers assist you today?',
+        time: 'Aug 19, 10:00 AM',
+      },
+      {
+        id: 100002,
+        from: 'customer',
+        senderName: 'Priya Patel',
+        text: 'Hello! I am planning a bridal jewellery suite for December and had a few questions.',
+        time: 'Aug 19, 10:15 AM',
+      },
+      {
+        id: 100003,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: 'We would love to help craft bespoke pieces for your bridal trousseau! You can discuss specific orders directly under each order or chat here anytime.',
+        time: 'Aug 19, 11:00 AM',
+      },
+    ],
+  },
+  {
+    id: 'customer-usr_customer_002',
+    customerId: 'usr_customer_002',
+    customerName: 'Aarav Shah',
+    participantRole: 'customer',
+    unread: 0,
+    customerUnread: 0,
+    lastMessage: 'Welcome to Dream Jewels concierge! Let us know if you need assistance with custom men jewellery.',
+    lastTime: 'Aug 18, 02:00 PM',
+    messages: [
+      {
+        id: 200001,
+        from: 'admin',
+        senderName: 'Dream Jewels Support',
+        text: '👋 Welcome to Dream Jewels concierge! Let us know if you need assistance with custom men jewellery.',
+        time: 'Aug 18, 02:00 PM',
+      },
+    ],
+  },
+];
+
 const DEFAULT_DESIGNER_NAME = 'Riya Sharma';
 
 const createDesignerThreadId = (designerName: string) =>
@@ -484,11 +971,19 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         const val = snapshot.val();
         if (val) {
           const parsed = parseOrdersFromState(val);
-          setOrders((prev) => {
-            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
-            const newStr = JSON.stringify(sanitizeForFirebase(parsed));
-            return prevStr === newStr ? prev : parsed;
-          });
+          if (parsed.length > 0) {
+            setOrders((prev) => {
+              const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+              const newStr = JSON.stringify(sanitizeForFirebase(parsed));
+              return prevStr === newStr ? prev : parsed;
+            });
+          } else {
+            set(ordersRef, sanitizeForFirebase(INITIAL_ORDERS)).catch(() => {});
+            setOrders(INITIAL_ORDERS);
+          }
+        } else {
+          set(ordersRef, sanitizeForFirebase(INITIAL_ORDERS)).catch(() => {});
+          setOrders(INITIAL_ORDERS);
         }
       }, (err) => console.warn('Firebase RTDB orders sync:', err.message));
       unsubs.push(unsubOrders);
@@ -522,11 +1017,16 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           const parsedThreads = parseThreadsFromState(value.threads);
           const parsedNotifs = parseNotificationsFromState(value.notifications);
           
-          setThreads((prev) => {
-            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
-            const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
-            return prevStr === newStr ? prev : parsedThreads;
-          });
+          if (parsedThreads.length > 0) {
+            setThreads((prev) => {
+              const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+              const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
+              return prevStr === newStr ? prev : parsedThreads;
+            });
+          } else {
+            set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => {});
+            setThreads(INITIAL_THREADS);
+          }
 
           setNotifications((prev) => {
             const prevStr = JSON.stringify(sanitizeForFirebase(prev));
@@ -537,6 +1037,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           if (typeof value.notifCounter === 'number') {
             setNotifCounter((prev) => (prev === value.notifCounter ? prev : value.notifCounter!));
           }
+        } else {
+          set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => {});
+          setThreads(INITIAL_THREADS);
         }
       }, (err) => console.warn('Firebase RTDB chatState sync:', err.message));
       unsubs.push(unsubChat);
@@ -918,15 +1421,20 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       };
       setThreads((prev) => {
         const targetThreadId = optionalThreadId || `customer-${customerId}`;
-        const existing = prev.find((t) => t.id === targetThreadId || (
-          !optionalThreadId && t.participantRole !== 'designer' &&
-          (t.customerId === customerId || t.customerName.toLowerCase() === customerName.toLowerCase())
-        ));
+        const existing = prev.find((t) => t.id === targetThreadId);
 
         if (existing) {
           return prev.map((t) =>
             t.id === existing.id
-              ? { ...t, customerId, messages: [...t.messages, msg], unread: t.unread + 1, lastMessage: text, lastTime: 'Just now' }
+              ? {
+                  ...t,
+                  customerId,
+                  customerName,
+                  messages: [...t.messages, msg],
+                  unread: (t.unread || 0) + 1,
+                  lastMessage: formatLastMessage(text, attachments),
+                  lastTime: 'Just now',
+                }
               : t
           );
         }
@@ -939,7 +1447,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           messages: [msg],
           unread: 1,
           customerUnread: 0,
-          lastMessage: text,
+          lastMessage: formatLastMessage(text, attachments),
           lastTime: 'Just now',
         };
         return [newThread, ...prev];
@@ -1228,6 +1736,30 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     [addNotification]
   );
 
+  const seedOrderTestChats = useCallback(() => {
+    setOrders(INITIAL_ORDERS);
+    setThreads(INITIAL_THREADS);
+    if (firebaseDatabase) {
+      set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(INITIAL_ORDERS)).catch(() => {});
+      set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => {});
+      set(ref(firebaseDatabase, 'chatState'), sanitizeForFirebase({
+        threads: INITIAL_THREADS,
+        orders: INITIAL_ORDERS,
+        users,
+        notifications,
+        notifCounter,
+      })).catch(() => {});
+    }
+    addNotification({
+      role: 'admin',
+      title: 'Order Chats Initialized',
+      body: '4 realistic order-wise test chat conversations synced to Firebase Realtime Database.',
+      time: 'Just now',
+      read: false,
+      type: 'system',
+    });
+  }, [users, notifications, notifCounter, addNotification]);
+
   const deleteMessage = useCallback((threadId: string, messageId: number) => {
     setThreads((prev) =>
       prev.map((t) => {
@@ -1289,6 +1821,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         getUnreadCount,
         getChatUnreadCount,
         triggerTestNotification,
+        seedOrderTestChats,
         deleteMessage,
         enablePushNotifications,
         pushPermission,
