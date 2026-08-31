@@ -209,7 +209,6 @@ export function ChatsPage() {
     setPendingAttachments([]);
   };
 
-  // Find linked order for action buttons
   const linkedOrder = useMemo(() => {
     if (!selectedThread) return null;
     return orders.find(
@@ -222,26 +221,20 @@ export function ChatsPage() {
   const totalUnreadCount = threads.reduce((sum, thread) => sum + thread.unread, 0);
 
   return (
-    <PageContainer>
-      <PageTitle
-        title="Order Messages"
-        subtitle="Manage and reply to customer inquiries and order specifications in real-time."
-        className="mb-4 sm:mb-6"
-      />
-
+    <div className="flex-1 p-3 sm:p-4 h-[calc(100vh-4.25rem)] overflow-hidden flex flex-col max-w-screen-2xl mx-auto w-full">
       {/* Main Messaging Container */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden h-[calc(100vh-12.5rem)] min-h-[580px] max-h-[760px] flex flex-col">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col flex-1">
         <div className="grid grid-cols-1 md:grid-cols-12 h-full flex-1 overflow-hidden">
           
           {/* ── Left Panel: Conversations List ── */}
-          <div className="md:col-span-5 lg:col-span-4 border-r border-slate-200 flex flex-col h-full overflow-hidden bg-slate-50/50">
+          <div className="md:col-span-5 lg:col-span-4 border-r border-slate-200/90 flex flex-col h-full overflow-hidden bg-slate-50/50">
             {/* Header & Filter */}
             <div className="p-3.5 border-b border-slate-200 bg-white flex-shrink-0 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-800 text-sm tracking-tight">Conversations</h3>
+                  <h3 className="font-bold text-slate-900 text-sm tracking-tight">Conversations</h3>
                   {totalUnreadCount > 0 && (
-                    <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold">
+                    <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-bold shadow-2xs">
                       {totalUnreadCount} new
                     </span>
                   )}
@@ -251,7 +244,7 @@ export function ChatsPage() {
                   <button
                     onClick={() => setFilterTab('All')}
                     className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                      filterTab === 'All' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
+                      filterTab === 'All' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
                     All ({threads.length})
@@ -259,7 +252,7 @@ export function ChatsPage() {
                   <button
                     onClick={() => setFilterTab('Unread')}
                     className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                      filterTab === 'Unread' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
+                      filterTab === 'Unread' ? 'bg-white text-emerald-700 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
                     Unread ({totalUnreadCount})
@@ -273,8 +266,8 @@ export function ChatsPage() {
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search orders, clients..."
-                  className="bg-transparent outline-none w-full text-slate-900 placeholder:text-slate-400"
+                  placeholder="Search order ID, item, client..."
+                  className="bg-transparent outline-none w-full text-slate-900 placeholder:text-slate-400 text-xs"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -285,7 +278,7 @@ export function ChatsPage() {
             </div>
 
             {/* Conversation Threads Scroll Area */}
-            <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
+            <div className="overflow-y-auto flex-1 divide-y divide-slate-100/80">
               {filteredThreads.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   {searchQuery ? 'No matching conversations' : 'No messages found'}
@@ -307,31 +300,31 @@ export function ChatsPage() {
                       onClick={() => selectThread(thread.id)}
                       className={`w-full flex items-start gap-3 p-3.5 text-left transition-all cursor-pointer relative ${
                         isSelected
-                          ? 'bg-white border-l-4 border-l-emerald-600 shadow-2xs'
-                          : 'hover:bg-white/80 active:bg-slate-100'
+                          ? 'bg-emerald-50/70 border-l-4 border-l-emerald-600 shadow-2xs'
+                          : 'hover:bg-white active:bg-slate-100'
                       }`}
                     >
                       {/* Product Thumbnail or Jewelry Emoji */}
-                      <div className="relative flex-shrink-0">
+                      <div className="relative flex-shrink-0 mt-0.5">
                         {matchingOrder?.image ? (
                           <img
                             src={matchingOrder.image}
                             alt={thread.orderName || 'Order'}
-                            className="w-11 h-11 rounded-xl object-cover border border-slate-200/80 shadow-2xs"
+                            className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-2xs"
                           />
                         ) : (
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 text-lg flex items-center justify-center shadow-2xs select-none">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-100/80 to-teal-50 border border-emerald-200 text-lg flex items-center justify-center shadow-2xs select-none">
                             {iconEmoji}
                           </div>
                         )}
                         {thread.unread > 0 && (
-                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-600 border-2 border-white rounded-full" />
                         )}
                       </div>
 
                       {/* Info & Last Message */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <div className="flex items-center justify-between gap-1 mb-1">
                           <h4 className="text-xs font-bold text-slate-900 truncate">
                             {thread.orderName || thread.customerName}
                           </h4>
@@ -339,13 +332,13 @@ export function ChatsPage() {
                         </div>
 
                         {/* Order ID & Customer Name */}
-                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                           {thread.orderId && (
-                            <span className="px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono">
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-100/70 border border-emerald-300 text-emerald-900 text-[10px] font-bold font-mono">
                               #{thread.orderId}
                             </span>
                           )}
-                          <span className="text-[11px] font-medium text-slate-500 truncate">
+                          <span className="text-[11px] font-medium text-slate-600 truncate">
                             👤 {thread.customerName}
                           </span>
                         </div>
@@ -354,12 +347,12 @@ export function ChatsPage() {
                         <p
                           className={`text-xs truncate ${
                             thread.unread > 0
-                              ? 'text-emerald-700 font-bold bg-emerald-50/80 px-1.5 py-0.5 rounded-md inline-block max-w-full'
+                              ? 'text-emerald-800 font-bold bg-emerald-100/60 px-1.5 py-0.5 rounded-md inline-block max-w-full'
                               : 'text-slate-500'
                           }`}
                         >
                           {thread.unread > 0
-                            ? (thread.unread === 1 ? '• You have one new message' : `• ${thread.unread} new messages`)
+                            ? (thread.unread === 1 ? '• 1 new message' : `• ${thread.unread} new messages`)
                             : thread.lastMessage}
                         </p>
                       </div>
@@ -409,20 +402,49 @@ export function ChatsPage() {
                   <div className="flex items-center gap-2.5 flex-shrink-0">
                     {selectedThread.orderId && (
                       <button
-                        onClick={() => navigate(`/dashboard/admin/orders?customerId=${encodeURIComponent(selectedThread.customerId)}`)}
-                        className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                        title="View order in Orders page"
+                        onClick={() => navigate(`/dashboard/admin/orders?search=${encodeURIComponent(selectedThread.orderId || '')}`)}
+                        className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                        title="View order in Orders table"
                       >
-                        <span>View Orders</span>
+                        <span>View Order</span>
                         <ExternalLink size={12} />
                       </button>
                     )}
                     <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold rounded-full">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Online</span>
+                      <span>Live</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Persistent Order Summary Ribbon */}
+                {linkedOrder && (
+                  <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-teal-950 text-white px-5 py-2.5 flex items-center justify-between gap-3 text-xs flex-shrink-0 shadow-inner">
+                    <div className="flex items-center gap-3 overflow-x-auto scrollbar-none py-0.5">
+                      <div className="flex items-center gap-1.5 font-semibold text-emerald-300 whitespace-nowrap">
+                        <Gem size={13} />
+                        <span>{linkedOrder.category || 'Jewellery'}</span>
+                      </div>
+                      <span className="text-white/30">•</span>
+                      <span className="text-slate-200 whitespace-nowrap">{linkedOrder.metal} ({linkedOrder.karat})</span>
+                      {linkedOrder.weight && (
+                        <>
+                          <span className="text-white/30">•</span>
+                          <span className="text-slate-200 whitespace-nowrap">{linkedOrder.weight}</span>
+                        </>
+                      )}
+                      {linkedOrder.budget && (
+                        <>
+                          <span className="text-white/30">•</span>
+                          <span className="font-bold text-amber-300 whitespace-nowrap">{linkedOrder.budget}</span>
+                        </>
+                      )}
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/15 text-emerald-200 border border-white/20 whitespace-nowrap">
+                      {linkedOrder.status || 'Active'}
+                    </span>
+                  </div>
+                )}
 
                 {/* Messages Feed */}
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
@@ -441,53 +463,15 @@ export function ChatsPage() {
                           <div className="max-w-[90%] sm:max-w-[80%] flex flex-col gap-1">
                             <div className="rounded-2xl rounded-bl-xs overflow-hidden border border-emerald-200 shadow-sm bg-white">
                               {/* Order Card Title Bar */}
-                              <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 px-4 py-2.5 flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-white">
-                                  <Gem size={15} />
+                              <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 px-4 py-2.5 flex items-center justify-between text-white">
+                                <div className="flex items-center gap-2">
+                                  <Gem size={14} />
                                   <span className="font-bold text-xs tracking-wide">Custom Order Specifications</span>
                                 </div>
                                 <span className="text-[10px] bg-white/20 text-white font-mono px-2 py-0.5 rounded-full font-bold">
                                   {selectedThread.orderId || 'Active Order'}
                                 </span>
                               </div>
-
-                              {/* Order Gallery / Reference Images Banner */}
-                              {(linkedOrder?.images?.length || linkedOrder?.image) ? (
-                                <div className="p-4 pb-1">
-                                  <p className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">
-                                    📸 Reference Jewellery Photos & Blueprints:
-                                  </p>
-                                  <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
-                                    {linkedOrder?.images && linkedOrder.images.length > 0 ? (
-                                      linkedOrder.images
-                                        .filter((img) => img.type?.startsWith('image/'))
-                                        .map((img) => (
-                                          <button
-                                            key={img.id}
-                                            type="button"
-                                            onClick={() => setLightboxImage({ url: img.url, name: img.name })}
-                                            className="flex-shrink-0 w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer shadow-2xs relative group"
-                                          >
-                                            <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
-                                              <span className="text-[9px] text-white bg-black/70 px-1.5 py-0.5 rounded font-medium truncate w-full">
-                                                {img.name}
-                                              </span>
-                                            </div>
-                                          </button>
-                                        ))
-                                    ) : linkedOrder?.image ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setLightboxImage({ url: linkedOrder.image!, name: linkedOrder.name })}
-                                        className="w-full h-40 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 hover:opacity-90 transition-all cursor-pointer shadow-2xs"
-                                      >
-                                        <img src={linkedOrder.image} alt={linkedOrder.name} className="w-full h-full object-cover" />
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              ) : null}
 
                               {/* Specs grid */}
                               <div className="p-4 space-y-2">
@@ -499,7 +483,7 @@ export function ChatsPage() {
                                     const label = row.slice(0, colonIdx + 1).trim();
                                     const value = row.slice(colonIdx + 1).trim();
                                     return (
-                                      <div key={i} className="flex gap-2 py-1 px-2 rounded-lg bg-slate-50 border border-slate-100">
+                                      <div key={i} className="flex gap-2 py-1.5 px-2.5 rounded-lg bg-slate-50 border border-slate-100">
                                         <span className="text-slate-400 font-medium whitespace-nowrap w-24 flex-shrink-0">{label}</span>
                                         <span className="text-slate-800 font-semibold truncate">{value}</span>
                                       </div>
@@ -539,7 +523,7 @@ export function ChatsPage() {
                               className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                                 isAdmin
                                   ? 'bg-emerald-600 text-white rounded-br-xs shadow-xs'
-                                  : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-xs shadow-2xs'
+                                  : 'bg-white text-slate-800 border border-slate-200/90 rounded-bl-xs shadow-2xs'
                               }`}
                             >
                               {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
@@ -560,79 +544,78 @@ export function ChatsPage() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Bottom Input Area */}
-                <div className="p-3 sm:p-4 border-t border-slate-200 bg-white flex-shrink-0">
-                  {pendingAttachments.length > 0 && (
-                    <div className="mb-2.5 flex flex-wrap gap-2">
-                      {pendingAttachments.map((attachment) => {
-                        const Icon = attachment.kind === 'image' ? ImageIcon : attachment.kind === 'video' ? Video : FileText;
-                        return (
-                          <div
-                            key={attachment.id}
-                            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 max-w-[220px]"
-                          >
-                            <Icon size={14} className="text-slate-500 flex-shrink-0" />
-                            <span className="min-w-0">
-                              <span className="block text-xs font-semibold text-slate-700 truncate">{attachment.name}</span>
-                              <span className="block text-[10px] text-slate-400">{formatFileSize(attachment.size)}</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removePendingAttachment(attachment.id)}
-                              className="ml-auto text-slate-400 hover:text-slate-700 cursor-pointer"
-                              aria-label={`Remove ${attachment.name}`}
-                            >
-                              <X size={13} />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*,video/*,application/pdf,.pdf,.doc,.docx,.cad,.dwg,.stl,.step,.3dm,application/*"
-                      className="hidden"
-                      onChange={(event) => handleFilesSelected(event.target.files)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
-                      aria-label="Attach files"
-                      title="Attach photo or blueprint"
-                    >
-                      <Paperclip size={16} />
-                    </button>
-                    <input
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                      placeholder={`Reply to ${selectedThread.customerName} about this order...`}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
-                    />
-                    <button
-                      onClick={handleSend}
-                      disabled={!input.trim() && pendingAttachments.length === 0}
-                      className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white flex items-center justify-center transition-colors shadow-xs active:scale-95 cursor-pointer flex-shrink-0"
-                      aria-label="Send message"
-                    >
-                      <Send size={15} />
-                    </button>
+                {/* Attachments Pending Preview */}
+                {pendingAttachments.length > 0 && (
+                  <div className="px-5 py-2 bg-slate-100/90 border-t border-slate-200 flex items-center gap-2 overflow-x-auto">
+                    {pendingAttachments.map((att) => (
+                      <div key={att.id} className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-xs shadow-2xs flex-shrink-0">
+                        {att.kind === 'image' ? (
+                          <img src={att.url} alt={att.name} className="w-5 h-5 rounded object-cover" />
+                        ) : (
+                          <FileText size={14} className="text-slate-500" />
+                        )}
+                        <span className="font-medium text-slate-700 truncate max-w-[120px]">{att.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removePendingAttachment(att.id)}
+                          className="text-slate-400 hover:text-red-500 cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
+                )}
+
+                {/* Input Area */}
+                <div className="p-3.5 bg-white border-t border-slate-200 flex items-center gap-2 flex-shrink-0">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => handleFilesSelected(e.target.files)}
+                    multiple
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors cursor-pointer flex-shrink-0"
+                    title="Attach image, video or document"
+                  >
+                    <Paperclip size={18} />
+                  </button>
+
+                  <input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Type your message to customer..."
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100 transition-all text-slate-900 placeholder:text-slate-400"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleSend}
+                    disabled={!input.trim() && pendingAttachments.length === 0}
+                    className="p-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex-shrink-0"
+                    title="Send message"
+                  >
+                    <Send size={16} />
+                  </button>
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full p-8">
-                <EmptyState
-                  icon={MessageSquare}
-                  title="Select an order conversation"
-                  description="Choose an order conversation from the left panel to review messages and reply."
-                />
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                <MessageSquare size={36} className="text-slate-300 mb-3" />
+                <p className="text-sm font-semibold text-slate-700">Select an order conversation</p>
+                <p className="text-xs text-slate-400 mt-1 max-w-[260px]">
+                  Choose any customer or order from the left list to review history and reply in real-time.
+                </p>
               </div>
             )}
           </div>
@@ -673,6 +656,6 @@ export function ChatsPage() {
           </div>
         </div>
       )}
-    </PageContainer>
+    </div>
   );
 }

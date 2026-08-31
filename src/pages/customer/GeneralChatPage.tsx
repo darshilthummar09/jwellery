@@ -224,28 +224,8 @@ export function GeneralChatPage() {
   const messages = activeThread?.messages ?? [];
 
   return (
-    <PageContainer>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <button
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-600 mb-1 transition-colors cursor-pointer"
-          >
-            <ArrowLeft size={14} />
-            Back to Dashboard
-          </button>
-          <PageTitle
-            title="Messages & Consultations"
-            subtitle="Chat directly with our luxury jewellery experts on custom designs and orders."
-            className="mb-0"
-          />
-        </div>
-      </div>
-
-      <div
-        className="bg-white rounded-2xl border border-slate-100 shadow-sm flex overflow-hidden relative"
-        style={{ height: 'calc(100vh - 230px)', minHeight: '520px' }}
-      >
+    <div className="flex-1 p-3 sm:p-4 h-[calc(100vh-4.25rem)] overflow-hidden flex flex-col max-w-screen-2xl mx-auto w-full">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex overflow-hidden relative h-full flex-1">
         {/* ─── Left Sidebar: Thread List ─── */}
         <div
           className={`w-full md:w-80 border-r border-slate-100 flex flex-col bg-slate-50/60 z-10 md:static absolute inset-0 transition-transform ${
@@ -574,6 +554,6 @@ export function GeneralChatPage() {
           </div>
         </div>
       )}
-    </PageContainer>
+    </div>
   );
 }
