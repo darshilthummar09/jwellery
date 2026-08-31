@@ -56,11 +56,12 @@ export interface ChatThread {
 export interface AppNotification {
   id: number;
   role: 'customer' | 'admin' | 'designer';
+  userId?: string;
   title: string;
   body: string;
   time: string;
   read: boolean;
-  type?: 'order' | 'chat';
+  type?: 'order' | 'chat' | 'system';
   orderId?: string;
   threadId?: string;
 }
@@ -138,11 +139,15 @@ interface ChatNotificationContextValue {
   approveOrder: (orderId: string) => void;
   rejectOrder: (orderId: string, reason?: string) => void;
   deleteOrder: (orderId: string) => void;
-  addNotification: (n: Omit<AppNotification, 'id'>) => void;
-  markAllNotificationsRead: (role: 'customer' | 'admin' | 'designer') => void;
+  addNotification: (n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => void;
+  markAllNotificationsRead: (role: 'customer' | 'admin' | 'designer', userId?: string) => void;
   markNotificationRead: (id: number) => void;
-  getUnreadCount: (role: 'customer' | 'admin' | 'designer') => number;
-  getChatUnreadCount: (role: 'customer' | 'admin' | 'designer') => number;
+  clearAllNotifications: (role?: 'customer' | 'admin' | 'designer', userId?: string) => void;
+  getUnreadCount: (role: 'customer' | 'admin' | 'designer', userId?: string) => number;
+  getChatUnreadCount: (role: 'customer' | 'admin' | 'designer', userId?: string) => number;
+  triggerTestNotification: (
+    type: 'order_created' | 'order_approved' | 'order_rejected' | 'order_progress' | 'chat_message' | 'system_alert'
+  ) => void;
   deleteMessage: (threadId: string, messageId: number) => void;
   enablePushNotifications: (userId?: string) => Promise<{ success: boolean; error?: string }>;
   pushPermission: NotificationPermission | 'unsupported';
@@ -294,7 +299,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const lastSerializedStateRef = useRef('');
   const channelRef = useRef<BroadcastChannel | null>(null);
 
-  // ─── Automated PWA App Icon Badging Synchronization ────────────────────────
+  // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
   useEffect(() => {
     let currentRole: 'admin' | 'customer' | 'designer' = 'admin';
     let currentCustId = '';
@@ -307,23 +312,40 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       }
     } catch {}
 
-    const unreadNotifications = notifications.filter((n) => n.role === currentRole && !n.read).length;
-    let unreadMessages = 0;
+    const unreadNotifications = notifications.filter((n) => {
+      if (n.read) return false;
+      if (n.role !== currentRole) return false;
+      if (currentRole === 'customer' && currentCustId && n.userId && n.userId !== currentCustId) return false;
+      if (currentRole === 'designer' && currentCustId && n.userId && n.userId !== currentCustId) return false;
+      return true;
+    }).length;
 
+    let unreadMessages = 0;
     if (currentRole === 'admin') {
       unreadMessages = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
     } else if (currentRole === 'customer') {
       unreadMessages = threads
-        .filter((t) => !currentCustId || t.customerId === currentCustId || t.id === `customer-${currentCustId}`)
+        .filter((t) => !currentCustId || t.customerId === currentCustId || t.id === `customer-${currentCustId}` || t.id === `order-${currentCustId}`)
         .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
     } else if (currentRole === 'designer') {
       unreadMessages = threads
-        .filter((t) => t.participantRole === 'designer')
+        .filter((t) => t.participantRole === 'designer' && (!currentCustId || t.customerName === currentCustId || t.id.includes(currentCustId)))
         .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
     }
 
-    const totalUnread = unreadNotifications + unreadMessages;
+    // Unread count: use unread notifications as primary counter
+    const totalUnread = unreadNotifications;
     setAppBadge(totalUnread);
+
+    // Sync browser document title: (3) Dream Jewels
+    try {
+      const baseTitle = 'Dream Jewels';
+      if (totalUnread > 0) {
+        document.title = `(${totalUnread}) ${baseTitle}`;
+      } else if (document.title.startsWith('(')) {
+        document.title = baseTitle;
+      }
+    } catch {}
   }, [notifications, threads]);
 
   // ─── Foreground Push Notification Listener ──────────────────────────────────
@@ -338,9 +360,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         body,
         time: 'Just now',
         read: false,
+        type: 'system',
       });
-
-      showLocalNotification(title, { body });
     });
 
     return () => unsub();
@@ -357,11 +378,21 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setNotifications((prev) => {
       const newItems = items.map((item, idx) => ({
         ...item,
-        id: Date.now() + idx,
+        id: Date.now() + idx + Math.floor(Math.random() * 100),
       }));
       return [...newItems, ...prev];
     });
     setNotifCounter((c) => c + items.length);
+
+    // Trigger local desktop banner & Web Audio sound
+    try {
+      const first = items[0];
+      if (first) {
+        showLocalNotification(first.title, { body: first.body });
+      }
+    } catch (e) {
+      console.debug('Notification trigger notice:', e);
+    }
   }, []);
 
   const nowTime = () =>
@@ -729,12 +760,14 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         },
         {
           role: 'customer',
+          userId: customerId,
           title: `Order placed: ${orderName}`,
           body: 'Your custom order has been received. Check your chat for updates.',
           time: 'Just now',
           read: false,
           type: 'chat',
           threadId: `customer-${customerId}`,
+          orderId: orderId,
         }
       ]);
     },
@@ -766,6 +799,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           addNotification([
             {
               role: 'customer',
+              userId: order.customerId,
               title: `Order Update: ${order.name}`,
               body: `Your order has been updated: ${changeDesc}.`,
               time: 'Just now',
@@ -790,9 +824,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
   }, [addNotification]);
 
-  // Approval only flips the status. It does NOT message or push data to the
-  // designer -- that only happens when the admin explicitly generates and
-  // sends a PDF brief (see OrdersPage's Generate/Send PDF actions).
+  // Approval only flips the status.
   const approveOrder = useCallback((orderId: string) => {
     setOrders((current) => {
       const order = current.find((item) => item.id === orderId);
@@ -808,6 +840,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       addNotification({
         role: 'customer',
+        userId: order.customerId,
         title: `Order approved: ${order.name}`,
         body: 'Your custom order has been approved and moved into design.',
         time: 'Just now',
@@ -851,6 +884,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       addNotification({
         role: 'customer',
+        userId: rejectedOrder.customerId,
         title: `Order rejected: ${rejectedOrder.name}`,
         body: rejectedOrder.rejectionReason
           ? `Reason: ${rejectedOrder.rejectionReason}`
@@ -982,6 +1016,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const recipientRole = thread.participantRole === 'designer' ? 'designer' : 'customer';
       addNotification({
         role: recipientRole,
+        userId: thread.customerId,
         title: 'New message from Support',
         body: text.length > 60 ? text.slice(0, 60) + '…' : text,
         time: 'Just now',
@@ -1009,19 +1044,40 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           : t
       )
     );
-    setNotifications((prev) => prev.filter((n) => n.role !== as || !isChatNotification(n)));
+
+    // Mark chat notifications for this thread as read without deleting history
+    setNotifications((prev) =>
+      prev.map((n) => {
+        if (n.role === as && n.type === 'chat' && (n.threadId === threadId || n.threadId?.includes(threadId))) {
+          return { ...n, read: true };
+        }
+        return n;
+      })
+    );
   }, []);
 
-
-
-  const markAllNotificationsRead = useCallback((role: 'customer' | 'admin' | 'designer') => {
-    setNotifications((prev) => prev.map((n) => (n.role === role ? { ...n, read: true } : n)));
+  const markAllNotificationsRead = useCallback((role: 'customer' | 'admin' | 'designer', userId?: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => {
+        if (n.role !== role) return n;
+        if (role === 'customer' && userId && n.userId && n.userId !== userId) return n;
+        if (role === 'designer' && userId && n.userId && n.userId !== userId) return n;
+        return { ...n, read: true };
+      })
+    );
     setThreads((prev) =>
-      prev.map((thread) => ({
-        ...thread,
-        unread: role === 'admin' ? 0 : thread.unread,
-        customerUnread: role === 'customer' || role === 'designer' ? 0 : thread.customerUnread,
-      }))
+      prev.map((thread) => {
+        if (role === 'admin') {
+          return { ...thread, unread: 0 };
+        }
+        if (role === 'customer' && (!userId || thread.customerId === userId || thread.id === `customer-${userId}`)) {
+          return { ...thread, customerUnread: 0 };
+        }
+        if (role === 'designer' && (!userId || thread.customerName === userId || thread.id.includes(userId))) {
+          return { ...thread, customerUnread: 0 };
+        }
+        return thread;
+      })
     );
   }, []);
 
@@ -1029,23 +1085,147 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   }, []);
 
+  const clearAllNotifications = useCallback((role?: 'customer' | 'admin' | 'designer', userId?: string) => {
+    if (!role) {
+      setNotifications([]);
+      return;
+    }
+    setNotifications((prev) =>
+      prev.filter((n) => {
+        if (n.role !== role) return true;
+        if (role === 'customer' && userId && n.userId && n.userId !== userId) return true;
+        if (role === 'designer' && userId && n.userId && n.userId !== userId) return true;
+        return false;
+      })
+    );
+  }, []);
+
   const getUnreadCount = useCallback(
-    (role: 'customer' | 'admin' | 'designer') =>
-      notifications.filter((n) => n.role === role && !n.read).length,
+    (role: 'customer' | 'admin' | 'designer', userId?: string) =>
+      notifications.filter((n) => {
+        if (n.read) return false;
+        if (n.role !== role) return false;
+        if (role === 'customer' && userId && n.userId && n.userId !== userId) return false;
+        if (role === 'designer' && userId && n.userId && n.userId !== userId) return false;
+        return true;
+      }).length,
     [notifications]
   );
 
   const getChatUnreadCount = useCallback(
-    (role: 'customer' | 'admin' | 'designer') => {
+    (role: 'customer' | 'admin' | 'designer', userId?: string) => {
       if (role === 'admin') {
-        return threads.reduce((sum, thread) => sum + thread.unread, 0);
+        return threads.reduce((sum, thread) => sum + (thread.unread || 0), 0);
       }
 
       return threads
-        .filter((thread) => thread.participantRole === role)
-        .reduce((sum, thread) => sum + thread.customerUnread, 0);
+        .filter((thread) => {
+          if (role === 'customer') {
+            if (userId) return thread.customerId === userId || thread.id === `customer-${userId}` || thread.id === `order-${userId}`;
+            return thread.participantRole === 'customer';
+          }
+          if (role === 'designer') {
+            if (userId) return thread.customerName === userId || thread.id.includes(userId);
+            return thread.participantRole === 'designer';
+          }
+          return false;
+        })
+        .reduce((sum, thread) => sum + (thread.customerUnread || 0), 0);
     },
     [threads]
+  );
+
+  const triggerTestNotification = useCallback(
+    (type: 'order_created' | 'order_approved' | 'order_rejected' | 'order_progress' | 'chat_message' | 'system_alert') => {
+      let currentRole: 'admin' | 'customer' | 'designer' = 'admin';
+      let currentCustId = 'cust-1';
+      let currentUserName = 'Priya Patel';
+      try {
+        const storedAuth = localStorage.getItem('auth_user') || sessionStorage.getItem('auth_user');
+        if (storedAuth) {
+          const u = JSON.parse(storedAuth);
+          if (u.role) currentRole = u.role === 'super-admin' ? 'admin' : u.role;
+          if (u.id) currentCustId = u.id;
+          if (u.name) currentUserName = u.name;
+        }
+      } catch {}
+
+      const testOrderId = `ORD-${Date.now().toString().slice(-4)}`;
+
+      switch (type) {
+        case 'order_created':
+          addNotification({
+            role: 'admin',
+            title: `New Custom Order: Royal Diamond Ring`,
+            body: `Order ${testOrderId} submitted by ${currentUserName} for ₹1,85,000.`,
+            time: 'Just now',
+            read: false,
+            type: 'order',
+            orderId: testOrderId,
+          });
+          break;
+        case 'order_approved':
+          addNotification({
+            role: 'customer',
+            userId: currentCustId,
+            title: `Order Approved: Solitaire Ring (${testOrderId})`,
+            body: 'Your custom jewelry order has been approved and moved to 3D CAD design stage.',
+            time: 'Just now',
+            read: false,
+            type: 'order',
+            orderId: testOrderId,
+          });
+          break;
+        case 'order_rejected':
+          addNotification({
+            role: 'customer',
+            userId: currentCustId,
+            title: `Order Review Update (${testOrderId})`,
+            body: 'Reason: Requested gemstones are currently out of stock. Please select an alternate cut.',
+            time: 'Just now',
+            read: false,
+            type: 'order',
+            orderId: testOrderId,
+          });
+          break;
+        case 'order_progress':
+          addNotification({
+            role: currentRole,
+            userId: currentCustId,
+            title: `Production Progress: 75% (${testOrderId})`,
+            body: 'Gemstone setting completed. Final polishing and hallmark inspection underway.',
+            time: 'Just now',
+            read: false,
+            type: 'order',
+            orderId: testOrderId,
+          });
+          break;
+        case 'chat_message':
+          addNotification({
+            role: currentRole,
+            userId: currentCustId,
+            title: currentRole === 'admin' ? `New message from ${currentUserName}` : 'New message from Support',
+            body: 'Hello! I uploaded the revised reference image for the pendant necklace.',
+            time: 'Just now',
+            read: false,
+            type: 'chat',
+            threadId: `customer-${currentCustId}`,
+          });
+          break;
+        case 'system_alert':
+          addNotification({
+            role: currentRole,
+            userId: currentCustId,
+            title: 'System Announcement: Festive Logistics Active',
+            body: 'Special priority dispatch enabled for all custom orders with real-time tracking.',
+            time: 'Just now',
+            read: false,
+            type: 'system',
+          });
+          break;
+      }
+    },
+    [addNotification]
   );
 
   const deleteMessage = useCallback((threadId: string, messageId: number) => {
@@ -1053,7 +1233,6 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       prev.map((t) => {
         if (t.id !== threadId) return t;
         const filteredMessages = t.messages.filter((m) => m.id !== messageId);
-        const lastMsgObj = filteredMessages[filteredMessages.length - 1];
         return {
           ...t,
           messages: filteredMessages,
@@ -1106,8 +1285,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         addNotification,
         markAllNotificationsRead,
         markNotificationRead,
+        clearAllNotifications,
         getUnreadCount,
         getChatUnreadCount,
+        triggerTestNotification,
         deleteMessage,
         enablePushNotifications,
         pushPermission,

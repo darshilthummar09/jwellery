@@ -2,8 +2,8 @@ import { CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
-import { useChatNotification } from '../../context/ChatNotificationContext';
-import { AppNotification } from '../../context/ChatNotificationContext';
+import { useAuth } from '../../hooks/useAuth';
+import { useChatNotification, AppNotification } from '../../context/ChatNotificationContext';
 
 interface NotificationsViewProps {
   notifications: AppNotification[];
@@ -19,10 +19,10 @@ function NotificationsView({
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-sm text-slate-500">{notifications.filter(n => !n.read).length} unread</span>
+        <span className="text-sm text-slate-500 font-medium">{notifications.filter(n => !n.read).length} unread</span>
         <button
           onClick={onMarkAllRead}
-          className="text-xs text-emerald-600 hover:underline font-medium flex items-center gap-1"
+          className="text-xs text-emerald-600 hover:underline font-medium flex items-center gap-1 cursor-pointer"
         >
           <CheckCheck size={13} /> Mark all read
         </button>
@@ -37,7 +37,7 @@ function NotificationsView({
               onClick={() => onMarkRead(n)}
               className={`flex items-start gap-4 px-6 py-4 hover:bg-slate-50 transition-colors cursor-pointer ${n.read ? 'opacity-60' : ''}`}
             >
-              <div className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${n.read ? 'bg-slate-200' : 'bg-emerald-500'}`} />
+              <div className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${n.read ? 'bg-slate-200' : 'bg-emerald-500 ring-2 ring-emerald-100'}`} />
               <div>
                 <p className={`text-sm font-semibold ${n.read ? 'text-slate-600' : 'text-slate-800'}`}>{n.title}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{n.body}</p>
@@ -52,9 +52,15 @@ function NotificationsView({
 }
 
 export function CustomerNotificationsPage() {
+  const { user } = useAuth();
   const { notifications, markAllNotificationsRead, markNotificationRead } = useChatNotification();
   const navigate = useNavigate();
-  const myNotifications = notifications.filter((n) => n.role === 'customer');
+
+  const myNotifications = notifications.filter((n) => {
+    if (n.role !== 'customer') return false;
+    if (user?.id && n.userId && n.userId !== user.id) return false;
+    return true;
+  });
 
   const handleNotificationClick = (n: AppNotification) => {
     markNotificationRead(n.id);
@@ -67,13 +73,12 @@ export function CustomerNotificationsPage() {
 
   return (
     <PageContainer>
-      <PageTitle title="Notifications" subtitle="Stay updated on your orders and messages." className="mb-8" />
+      <PageTitle title="Notifications" subtitle="Stay updated on your orders, quotes, and messages." className="mb-8" />
       <NotificationsView
         notifications={myNotifications}
-        onMarkAllRead={() => markAllNotificationsRead('customer')}
+        onMarkAllRead={() => markAllNotificationsRead('customer', user?.id)}
         onMarkRead={handleNotificationClick}
       />
     </PageContainer>
   );
 }
-

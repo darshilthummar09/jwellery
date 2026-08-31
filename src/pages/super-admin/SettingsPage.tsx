@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Settings, Bell, Shield, Check, Sparkles } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
+import { useChatNotification } from '../../context/ChatNotificationContext';
+import { playNotificationSound, showLocalNotification } from '../../services/notificationService';
 
 interface PlatformSettings {
   platformName: string;
@@ -26,6 +28,14 @@ const DEFAULT_SETTINGS: PlatformSettings = {
 };
 
 export function SettingsPage() {
+  const {
+    getUnreadCount,
+    triggerTestNotification,
+    clearAllNotifications,
+    enablePushNotifications,
+    pushPermission,
+  } = useChatNotification();
+
   const [settings, setSettings] = useState<PlatformSettings>(() => {
     try {
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -114,11 +124,24 @@ export function SettingsPage() {
 
         {/* Notification Settings */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <Bell size={15} className="text-emerald-600" />
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <Bell size={15} className="text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-800">Notifications</h2>
+                <p className="text-xs text-slate-400">Configure global delivery channels and live testing</p>
+              </div>
             </div>
-            <h2 className="font-semibold text-slate-800">Notifications</h2>
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                pushPermission === 'granted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${pushPermission === 'granted' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                {pushPermission === 'granted' ? 'Push Granted' : 'Push Inactive'}
+              </span>
+            </div>
           </div>
           <div className="divide-y divide-slate-50">
             <div className="px-6 py-4 flex items-center justify-between">
@@ -164,19 +187,176 @@ export function SettingsPage() {
                 <label className="text-sm font-medium text-slate-700 block">In-App & Push Notifications</label>
                 <span className="text-xs text-slate-400">Show notification bell badge & live push alerts</span>
               </div>
+              <div className="flex items-center gap-3">
+                {pushPermission !== 'granted' && (
+                  <button
+                    type="button"
+                    onClick={() => enablePushNotifications()}
+                    className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
+                  >
+                    Request Push Permission
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, inAppNotifications: !settings.inAppNotifications })}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                    settings.inAppNotifications ? 'bg-emerald-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      settings.inAppNotifications ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Interactive Notification Testing Hub */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50/50 to-teal-50/30">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                <Sparkles size={16} />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-800">Notification Testing Suite</h2>
+                <p className="text-xs text-slate-500">Test all notification triggers, counters, audio chimes, and PWA icon badging</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-700 shadow-2xs">
+                Total Unread: {getUnreadCount('admin')}
+              </span>
               <button
                 type="button"
-                onClick={() => setSettings({ ...settings, inAppNotifications: !settings.inAppNotifications })}
-                className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
-                  settings.inAppNotifications ? 'bg-emerald-500' : 'bg-slate-200'
-                }`}
+                onClick={() => clearAllNotifications()}
+                className="px-3 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
               >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    settings.inAppNotifications ? 'translate-x-5' : ''
-                  }`}
-                />
+                Clear All
               </button>
+            </div>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {/* 1. New Order */}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-sm text-slate-800 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  New Order Placed
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Simulate customer placing a custom diamond ring order.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => triggerTestNotification('order_created')}
+                className="w-full py-2 px-3 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Trigger Order Notification
+              </button>
+            </div>
+
+            {/* 2. Order Approved */}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-sm text-slate-800 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  Order Approved
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Simulate admin approving order & notifying customer.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => triggerTestNotification('order_approved')}
+                className="w-full py-2 px-3 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Trigger Approval Alert
+              </button>
+            </div>
+
+            {/* 3. Order Progress */}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-sm text-slate-800 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Progress Update
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Simulate design/production milestone updated to 75%.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => triggerTestNotification('order_progress')}
+                className="w-full py-2 px-3 bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Trigger Progress Alert
+              </button>
+            </div>
+
+            {/* 4. Chat Message */}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-sm text-slate-800 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  Chat Message
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Simulate client sending custom reference design in chat.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => triggerTestNotification('chat_message')}
+                className="w-full py-2 px-3 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Trigger Chat Notification
+              </button>
+            </div>
+
+            {/* 5. System Announcement */}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-sm text-slate-800 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-teal-500" />
+                  System Broadcast
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Simulate platform announcement regarding festive shipping.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => triggerTestNotification('system_alert')}
+                className="w-full py-2 px-3 bg-white hover:bg-teal-50 text-teal-700 border border-teal-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Trigger Broadcast
+              </button>
+            </div>
+
+            {/* 6. Audio Chime & Desktop Push */}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-sm text-slate-800 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                  Audio & Native Banner
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Play the Web Audio synthesized chime and show OS banner.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => playNotificationSound()}
+                  className="flex-1 py-2 px-2 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer text-center"
+                >
+                  Play Chime
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showLocalNotification('Dream Jewels Test', { body: 'This is a test notification from Dream Jewels.' })}
+                  className="flex-1 py-2 px-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer text-center"
+                >
+                  OS Banner
+                </button>
+              </div>
             </div>
           </div>
         </div>

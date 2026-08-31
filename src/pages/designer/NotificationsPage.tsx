@@ -2,22 +2,29 @@ import { CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
-import { useChatNotification } from '../../context/ChatNotificationContext';
+import { useAuth } from '../../hooks/useAuth';
+import { useChatNotification, AppNotification } from '../../context/ChatNotificationContext';
 
 export function DesignerNotificationsPage() {
+  const { user } = useAuth();
   const { notifications, markAllNotificationsRead, markNotificationRead } = useChatNotification();
   const navigate = useNavigate();
-  const myNotifications = notifications.filter((n) => n.role === 'designer');
+
+  const myNotifications = notifications.filter((n) => {
+    if (n.role !== 'designer') return false;
+    if (user?.id && n.userId && n.userId !== user.id) return false;
+    return true;
+  });
 
   return (
     <PageContainer>
       <PageTitle title="Notifications" subtitle="Stay updated on your order assignments." className="mb-8" />
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <span className="text-sm text-slate-500">{myNotifications.filter((n) => !n.read).length} unread</span>
+          <span className="text-sm text-slate-500 font-medium">{myNotifications.filter((n) => !n.read).length} unread</span>
           <button
-            onClick={() => markAllNotificationsRead('designer')}
-            className="text-xs text-emerald-600 hover:underline font-medium flex items-center gap-1"
+            onClick={() => markAllNotificationsRead('designer', user?.id)}
+            className="text-xs text-emerald-600 hover:underline font-medium flex items-center gap-1 cursor-pointer"
           >
             <CheckCheck size={13} /> Mark all read
           </button>
@@ -26,7 +33,7 @@ export function DesignerNotificationsPage() {
           {myNotifications.length === 0 ? (
             <div className="px-6 py-10 text-center text-sm text-slate-400">No notifications yet.</div>
           ) : (
-            myNotifications.map((n) => (
+            myNotifications.map((n: AppNotification) => (
               <div
                 key={n.id}
                 onClick={() => {
@@ -53,4 +60,3 @@ export function DesignerNotificationsPage() {
     </PageContainer>
   );
 }
-

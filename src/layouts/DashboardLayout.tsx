@@ -3,6 +3,7 @@ import { Outlet } from 'react-router';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 import { useRole } from '../hooks/useRole';
+import { useAuth } from '../hooks/useAuth';
 import { useChatNotification } from '../context/ChatNotificationContext';
 import { setPwaAppBadge, requestBadgePermission } from '../utils/pwaBadge';
 
@@ -13,6 +14,7 @@ import { setPwaAppBadge, requestBadgePermission } from '../utils/pwaBadge';
 export function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { role } = useRole();
+  const { user } = useAuth();
   const { getChatUnreadCount, getUnreadCount, orders } = useChatNotification();
   const isCustomer = role === 'customer';
 
@@ -24,15 +26,14 @@ export function DashboardLayout() {
   // Automatically update native PWA Home Screen Icon Badge (iOS / Android / Desktop)
   useEffect(() => {
     const targetRole = role === 'super-admin' ? 'admin' : (role ?? 'customer');
-    const chatUnread = getChatUnreadCount(targetRole as 'customer' | 'admin' | 'designer');
-    const notifUnread = getUnreadCount(targetRole as 'customer' | 'admin' | 'designer');
+    const notifUnread = getUnreadCount(targetRole as 'customer' | 'admin' | 'designer', user?.id);
     const pendingOrders = (role === 'admin' || role === 'super-admin')
       ? orders.filter((o) => o.status === 'Pending Approval').length
       : 0;
 
-    const totalBadge = chatUnread + notifUnread + pendingOrders;
+    const totalBadge = notifUnread + (role === 'admin' || role === 'super-admin' ? pendingOrders : 0);
     setPwaAppBadge(totalBadge);
-  }, [role, getChatUnreadCount, getUnreadCount, orders]);
+  }, [role, user?.id, getChatUnreadCount, getUnreadCount, orders]);
 
   return (
     <div className="flex h-[100dvh] bg-slate-50 overflow-hidden">

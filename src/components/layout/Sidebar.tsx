@@ -91,7 +91,7 @@ function SidebarContent({
   const { getChatUnreadCount, orders } = useChatNotification();
   const navigate = useNavigate();
   const navItems = role ? ROLE_NAV_MAP[role] : [];
-  const chatUnreadCount = role ? getChatUnreadCount(role === 'super-admin' ? 'admin' : role) : 0;
+  const chatUnreadCount = role ? getChatUnreadCount(role === 'super-admin' ? 'admin' : role, user?.id) : 0;
 
   const handleLogout = () => {
     logout();

@@ -35,10 +35,15 @@ function NotificationBell() {
 
   // Map role to notification role
   const notifRole = role === 'super-admin' ? 'admin' : (role as 'customer' | 'admin' | 'designer') ?? 'admin';
-  const myNotifications = notifications.filter((n) => n.role === notifRole).slice(0, 5);
-  const notificationUnreadCount = getUnreadCount(notifRole);
-  const chatUnreadCount = getChatUnreadCount(notifRole);
-  const unreadCount = notificationUnreadCount + chatUnreadCount;
+  const myNotifications = notifications.filter((n) => {
+    if (n.role !== notifRole) return false;
+    if (notifRole === 'customer' && user?.id && n.userId && n.userId !== user.id) return false;
+    if (notifRole === 'designer' && user?.id && n.userId && n.userId !== user.id) return false;
+    return true;
+  });
+
+  const unreadCount = getUnreadCount(notifRole, user?.id);
+  const chatUnreadCount = getChatUnreadCount(notifRole, user?.id);
 
   const handleEnablePush = async () => {
     setIsEnabling(true);
@@ -50,24 +55,16 @@ function NotificationBell() {
   };
 
   const handleMarkAllRead = () => {
-    markAllNotificationsRead(notifRole);
+    markAllNotificationsRead(notifRole, user?.id);
     setAppBadgeCount(0);
   };
 
   const handleViewAll = () => {
     setOpen(false);
-    if (role === 'super-admin') navigate('/dashboard/super-admin/orders');
-    else if (role === 'admin') navigate('/dashboard/admin/chats');
+    if (role === 'super-admin') navigate('/dashboard/super-admin/settings');
+    else if (role === 'admin') navigate('/dashboard/admin/orders');
     else if (role === 'customer') navigate('/dashboard/customer/notifications');
     else if (role === 'designer') navigate('/dashboard/designer/notifications');
-  };
-
-  const handleOpenChats = () => {
-    setOpen(false);
-    if (role === 'super-admin') navigate('/dashboard/super-admin/orders');
-    else if (role === 'admin') navigate('/dashboard/admin/chats');
-    else if (role === 'customer') navigate('/dashboard/customer/chat');
-    else if (role === 'designer') navigate('/dashboard/designer/chat');
   };
 
   return (
@@ -81,7 +78,7 @@ function NotificationBell() {
         <Bell size={18} />
         {/* Unread dot / count */}
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -125,25 +122,10 @@ function NotificationBell() {
               )}
             </div>
             <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
-              {chatUnreadCount > 0 && (
-                <div
-                  onClick={handleOpenChats}
-                  className="px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <span className="mt-1.5 w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">Unread chat messages</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {chatUnreadCount} message{chatUnreadCount === 1 ? '' : 's'} waiting in chat.
-                    </p>
-                    <p className="text-[10px] text-slate-300 mt-0.5">Just now</p>
-                  </div>
-                </div>
-              )}
-              {myNotifications.length === 0 && chatUnreadCount === 0 ? (
+              {myNotifications.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-slate-400">No notifications</div>
               ) : (
-                myNotifications.map((n) => (
+                myNotifications.slice(0, 10).map((n) => (
                   <div
                     key={n.id}
                     onClick={() => {
