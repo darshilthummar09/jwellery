@@ -6,7 +6,10 @@ import {
   authLogout,
   authGetCurrentUser,
 } from '../services/auth.service';
-import { SESSION_KEY } from '../utils/session';
+import { SESSION_KEY, getSessionId } from '../utils/session';
+import { subscribeToSessionTakeover } from '../services/deviceSession';
+
+export const KICKED_OUT_FLAG_KEY = 'dreamjewels_kicked_flag';
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -34,6 +37,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Enforce single-device login: if another device logs into this account,
+  // its claim on /activeSessions/{userId} supersedes ours and we log out here.
+  useEffect(() => {
+    if (!user) return;
+
+    const localSessionId = getSessionId();
+    const unsubscribe = subscribeToSessionTakeover(user.id, localSessionId, () => {
+      sessionStorage.setItem(KICKED_OUT_FLAG_KEY, '1');
+      authLogout();
+      setUser(null);
+    });
+
+    return unsubscribe;
+  }, [user]);
 
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<AuthResult> => {

@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getMessaging, getToken, onMessage, isSupported, MessagePayload } from 'firebase/messaging';
 import { ref, set } from 'firebase/database';
 import { firebaseDatabase } from './firebase';
+import { updateSessionFcmToken } from './deviceSession';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBZfAB3BGJLYUYaNmhDYYWfUoskO4U8N0k",
@@ -147,6 +148,10 @@ export const requestPushPermission = async (userId?: string): Promise<{
             ? 'Android'
             : 'Desktop/Web',
       });
+
+      // Also record it against this device's active session, so a future
+      // login-takeover or chat push knows exactly which token to target.
+      await updateSessionFcmToken(userId, token);
     }
 
     return { success: true, token };

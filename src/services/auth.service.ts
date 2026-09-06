@@ -13,6 +13,7 @@ import { LoginCredentials, AuthResult } from '../types/auth.types';
 import { User } from '../types/user.types';
 import { MOCK_USERS } from '../data/mock-users';
 import { saveSession, getSession, clearSession } from '../utils/session';
+import { claimSession } from './deviceSession';
 
 /**
  * Authenticates a user with username + password.
@@ -53,7 +54,12 @@ export async function authLogin(credentials: LoginCredentials): Promise<AuthResu
   // Strip password before storing
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password: _pw, ...safeUser } = match;
-  saveSession(safeUser);
+  const sessionId = saveSession(safeUser);
+
+  // Claim this device as the account's one-and-only active session. Whichever
+  // device was previously logged in will see its sessionId superseded and log
+  // itself out (see AuthContext's subscribeToSessionTakeover).
+  await claimSession(safeUser.id, sessionId);
 
   return { success: true, user: safeUser };
 }

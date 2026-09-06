@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   // apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -26,6 +27,10 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.appId
 );
 
-export const firebaseDatabase = isFirebaseConfigured
-  ? getDatabase(getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig))
+const firebaseApp = isFirebaseConfigured
+  ? (getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig))
   : null;
+
+export const firebaseDatabase = firebaseApp ? getDatabase(firebaseApp) : null;
+
+export const firebaseFunctions = firebaseApp ? getFunctions(firebaseApp) : null;

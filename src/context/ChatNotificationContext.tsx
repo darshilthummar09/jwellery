@@ -9,6 +9,7 @@ import {
   registerForegroundPushListener,
   showLocalNotification,
 } from '../services/notificationService';
+import { sendChatPushNotification } from '../services/pushChat';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -840,7 +841,32 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     const unsub = registerForegroundPushListener((payload) => {
       const title = payload.notification?.title || payload.data?.title || 'Dream Jewels Update';
       const body = payload.notification?.body || payload.data?.body || 'You have a new update.';
-      
+      const pushType = payload.data?.type;
+
+      // A takeover notice isn't role-scoped (it's account-specific, and the
+      // realtime session listener has usually already logged this device out
+      // by the time the push round-trips) — just surface the banner/chime.
+      if (pushType === 'session-takeover') {
+        showLocalNotification(title, { body });
+        return;
+      }
+
+      if (pushType === 'chat-message') {
+        const role = (payload.data?.role as 'customer' | 'admin' | 'designer' | undefined) || 'admin';
+        addNotification({
+          role,
+          userId: payload.data?.userId || undefined,
+          title,
+          body,
+          time: 'Just now',
+          read: false,
+          type: 'chat',
+          threadId: payload.data?.threadId || undefined,
+          orderId: payload.data?.orderId || undefined,
+        });
+        return;
+      }
+
       addNotification({
         role: 'admin',
         title,
@@ -1453,17 +1479,32 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         return [newThread, ...prev];
       });
 
+      const notifTitle = `New message from ${customerName}`;
+      const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
+      const targetThreadId = optionalThreadId || `customer-${customerId}`;
+
       addNotification({
         role: 'admin',
-        title: `New message from ${customerName}`,
-        body: text.length > 60 ? text.slice(0, 60) + '…' : text,
+        title: notifTitle,
+        body: notifBody,
         time: 'Just now',
         read: false,
         type: 'chat',
-        threadId: optionalThreadId || `customer-${customerId}`,
+        threadId: targetThreadId,
+      });
+
+      // +1 accounts for the notification just queued above, which hasn't
+      // landed in `notifications` state yet at this point in the call.
+      const badgeCount = notifications.filter((n) => n.role === 'admin' && !n.read).length + 1;
+      sendChatPushNotification({
+        targetRole: 'admin',
+        title: notifTitle,
+        body: notifBody,
+        threadId: targetThreadId,
+        badgeCount,
       });
     },
-    [addNotification]
+    [addNotification, notifications]
   );
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
@@ -1522,18 +1563,32 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     const thread = threads.find((t) => t.id === threadId);
     if (thread) {
       const recipientRole = thread.participantRole === 'designer' ? 'designer' : 'customer';
+      const notifTitle = 'New message from Support';
+      const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
+
       addNotification({
         role: recipientRole,
         userId: thread.customerId,
-        title: 'New message from Support',
-        body: text.length > 60 ? text.slice(0, 60) + '…' : text,
+        title: notifTitle,
+        body: notifBody,
         time: 'Just now',
         read: false,
         type: 'chat',
         threadId: threadId,
       });
+
+      // +1 accounts for the notification just queued above.
+      const badgeCount =
+        notifications.filter((n) => n.role === recipientRole && n.userId === thread.customerId && !n.read).length + 1;
+      sendChatPushNotification({
+        targetUserId: thread.customerId,
+        title: notifTitle,
+        body: notifBody,
+        threadId,
+        badgeCount,
+      });
     }
-  }, [threads, addNotification]);
+  }, [threads, addNotification, notifications]);
 
   const markThreadRead = useCallback((threadId: string, as: 'admin' | 'customer' | 'designer') => {
     setThreads((prev) =>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, Loader2, ShieldAlert, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLE_DASHBOARD_PATH } from '../../constants/navigation';
 import { UserRole } from '../../types/role.types';
+import { KICKED_OUT_FLAG_KEY } from '../../context/AuthContext';
 
 function getSafePostLoginPath(role: UserRole, attemptedPath?: string): string {
   const roleDashboardPath = ROLE_DASHBOARD_PATH[role];
@@ -27,8 +28,18 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showKickedBanner, setShowKickedBanner] = useState(false);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
+
+  // If this device was just force-logged-out because the account signed in
+  // elsewhere (see AuthContext's session-takeover listener), surface why.
+  useEffect(() => {
+    if (sessionStorage.getItem(KICKED_OUT_FLAG_KEY)) {
+      sessionStorage.removeItem(KICKED_OUT_FLAG_KEY);
+      setShowKickedBanner(true);
+    }
+  }, []);
 
   // Already logged in → redirect to dashboard
   useEffect(() => {
@@ -68,6 +79,23 @@ export function LoginPage() {
           <h1 className="text-2xl font-bold text-slate-900">Welcome to Dream Jewels</h1>
           <p className="text-sm text-slate-500 mt-1">Jewellery Management Platform</p>
         </div>
+
+        {showKickedBanner && (
+          <div className="flex items-start gap-3 px-4 py-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm mb-5">
+            <ShieldAlert size={18} className="flex-shrink-0 mt-0.5" />
+            <p className="flex-1">
+              You were signed out because this account was signed in from another device. Only one device can be logged in at a time.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowKickedBanner(false)}
+              className="flex-shrink-0 text-amber-500 hover:text-amber-700 p-0.5 rounded-lg transition-colors"
+              aria-label="Dismiss"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
 
         {/* Login Card */}
         <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">

@@ -1,0 +1,16 @@
+{
+  "name": "functions",
+  "description": "Dream Jewels Cloud Functions — single-device login enforcement and order-chat push notifications.",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.3.0",
+    "firebase-functions": "^7.3.2"
+  },
+  "scripts": {
+    "logs": "firebase functions:log"
+  }
+}

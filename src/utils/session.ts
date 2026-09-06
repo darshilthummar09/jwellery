@@ -12,13 +12,24 @@ export interface StoredSession {
   createdAt: number;
   expiresAt: number;
   lastActiveAt?: number;
+  /** Random id minted per login, used to detect when another device has taken over this account's session. */
+  sessionId: string;
+}
+
+function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `sess_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
 /**
  * Saves a user session to LocalStorage with a 3-month expiration timestamp.
  * Session persists when the user or admin closes the browser or application.
+ * Mints a fresh sessionId every call so a new login always supersedes any prior device.
  */
-export function saveSession(user: User): void {
+export function saveSession(user: User): string {
+  const sessionId = generateSessionId();
   try {
     const now = Date.now();
     const sessionData: StoredSession = {
@@ -26,12 +37,29 @@ export function saveSession(user: User): void {
       createdAt: now,
       expiresAt: now + THREE_MONTHS_MS,
       lastActiveAt: now,
+      sessionId,
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
     // Clean up any legacy sessionStorage
     sessionStorage.removeItem(SESSION_KEY);
   } catch (error) {
     console.error('Failed to save session to localStorage:', error);
+  }
+  return sessionId;
+}
+
+/**
+ * Returns this device's current sessionId, or null if no session (or a legacy
+ * pre-sessionId session) is stored.
+ */
+export function getSessionId(): string | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.sessionId === 'string' ? parsed.sessionId : null;
+  } catch {
+    return null;
   }
 }
 

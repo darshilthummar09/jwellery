@@ -3,6 +3,22 @@
     "chatState": {
       ".read": true,
       ".write": true
+    },
+    "orders": {
+      ".read": true,
+      ".write": true
+    },
+    "users": {
+      ".read": true,
+      ".write": true
+    },
+    "userTokens": {
+      ".read": true,
+      ".write": true
+    },
+    "activeSessions": {
+      ".read": true,
+      ".write": true
     }
   }
 }
