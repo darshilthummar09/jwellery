@@ -68,8 +68,8 @@ export function DesignerChatPage() {
   const thread = getDesignerThread(designerName);
 
   useEffect(() => {
-    ensureDesignerThread(designerName);
-  }, [designerName, ensureDesignerThread]);
+    ensureDesignerThread(designerName, undefined, user?.id);
+  }, [designerName, ensureDesignerThread, user?.id]);
 
   useEffect(() => {
     if (thread) {

@@ -30,7 +30,13 @@ initializeApp({ databaseURL: DATABASE_URL });
 const db = getDatabase();
 const messaging = getMessaging();
 
-/** Sends one FCM message and swallows "token no longer valid" errors — nothing to clean up automatically here since the token will simply be replaced next time that device re-enables push. */
+async function removeInvalidToken(token, tokenPaths) {
+  const paths = tokenPaths.get(token) || [];
+  await Promise.all(paths.map((path) => db.ref(path).remove().catch((err) => {
+    console.warn('Could not remove invalid FCM token:', path, err);
+  })));
+}
+
 async function sendToToken(token, { title, body, data }) {
   try {
     await messaging.send({
@@ -40,7 +46,7 @@ async function sendToToken(token, { title, body, data }) {
     });
     return true;
   } catch (err) {
-    if (err?.code === 'messaging/registration-token-not-registered') {
+    if (err?.code === 'messaging/registration-token-not-registered' || err?.code === 'messaging/invalid-registration-token') {
       console.warn('Skipping push: token no longer registered.', token.slice(0, 12));
     } else {
       console.error('Failed to send push:', err);
@@ -80,42 +86,72 @@ exports.notifyDeviceTakeover = onValueWritten(
 /** Roles that share the single "admin" inbox in the app today (see AppRouter.tsx). */
 const ADMIN_INBOX_ROLES = ['admin', 'super-admin'];
 
-async function collectTokensForRole(role) {
+async function collectTokensForUser(userId) {
+  const tokenPaths = new Map();
+  const tokens = [];
+  const addToken = (token, path) => {
+    if (!token) return;
+    tokens.push(token);
+    if (!tokenPaths.has(token)) tokenPaths.set(token, []);
+    tokenPaths.get(token).push(path);
+  };
+
+  const storedTokensSnap = await db.ref(`userTokens/${userId}`).once('value');
+  const storedTokens = storedTokensSnap.val() || {};
+  Object.entries(storedTokens).forEach(([key, value]) => {
+    const token = typeof value === 'string' ? value : value?.token;
+    addToken(token, `userTokens/${userId}/${key}`);
+  });
+
+  const sessionSnap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
+  addToken(sessionSnap.val(), `activeSessions/${userId}/fcmToken`);
+  return { tokens, tokenPaths };
+}
+
+async function collectTokensForRole(role, senderId) {
   const usersSnap = await db.ref('users').once('value');
   const usersVal = usersSnap.val();
   if (!usersVal) return [];
 
   const users = Array.isArray(usersVal) ? usersVal : Object.values(usersVal);
   const matchedIds = users
-    .filter((u) => u && (role === 'admin' ? ADMIN_INBOX_ROLES.includes(u.role) : u.role === role))
+    .filter((u) => u && u.id !== senderId && (role === 'admin' ? ADMIN_INBOX_ROLES.includes(u.role) : u.role === role))
     .map((u) => u.id)
     .filter(Boolean);
 
-  const sessions = await Promise.all(
-    matchedIds.map((id) => db.ref(`activeSessions/${id}/fcmToken`).once('value'))
+  const tokenResults = await Promise.all(
+    matchedIds.map((id) => collectTokensForUser(id))
   );
-
-  return sessions.map((snap) => snap.val()).filter(Boolean);
-}
-
-async function collectTokenForUser(userId) {
-  const snap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
-  const token = snap.val();
-  return token ? [token] : [];
+  const tokenPaths = new Map();
+  const tokens = [];
+  tokenResults.forEach((result) => {
+    result.tokens.forEach((token) => tokens.push(token));
+    result.tokenPaths.forEach((paths, token) => tokenPaths.set(token, paths));
+  });
+  return { tokens, tokenPaths };
 }
 
 exports.sendChatPush = onCall(async (request) => {
-  const { targetUserId, targetRole, title, body, threadId, orderId, badgeCount } = request.data || {};
+  const { senderId, targetUserId, targetRole, title, body, threadId, orderId, badgeCount } = request.data || {};
 
-  if (!title || !body || (!targetUserId && !targetRole)) {
-    return { sent: 0, error: 'targetUserId or targetRole, plus title and body, are required.' };
+  if (!senderId || !title || !body || (!targetUserId && !targetRole)) {
+    return { sent: 0, error: 'senderId, targetUserId or targetRole, plus title and body, are required.' };
   }
 
-  const tokens = targetUserId
-    ? await collectTokenForUser(targetUserId)
-    : await collectTokensForRole(targetRole);
+  const recipient = targetUserId
+    ? await collectTokensForUser(targetUserId)
+    : await collectTokensForRole(targetRole, senderId);
 
-  const uniqueTokens = [...new Set(tokens)];
+  const sender = await collectTokensForUser(senderId);
+  const senderTokens = new Set(sender.tokens);
+  const uniqueTokens = [...new Set(recipient.tokens)].filter((token) => !senderTokens.has(token));
+
+  console.log('[sendChatPush] Sender ID:', senderId);
+  console.log('[sendChatPush] Receiver ID:', targetUserId || `role:${targetRole}`);
+  console.log('[sendChatPush] Sender FCM Token:', [...senderTokens]);
+  console.log('[sendChatPush] Receiver FCM Token:', [...new Set(recipient.tokens)]);
+  console.log('[sendChatPush] Notification Target Token:', uniqueTokens);
+
   if (uniqueTokens.length === 0) {
     return { sent: 0 };
   }
@@ -126,6 +162,7 @@ exports.sendChatPush = onCall(async (request) => {
     orderId: orderId || '',
     role: targetRole || '',
     userId: targetUserId || '',
+    senderId: senderId || '',
     badgeCount: badgeCount !== undefined && badgeCount !== null ? String(badgeCount) : '',
   };
 
@@ -134,6 +171,15 @@ exports.sendChatPush = onCall(async (request) => {
     notification: { title, body },
     data,
   });
+
+  await Promise.all(response.responses.map(async (result, index) => {
+    if (!result.success && (
+      result.error?.code === 'messaging/registration-token-not-registered' ||
+      result.error?.code === 'messaging/invalid-registration-token'
+    )) {
+      await removeInvalidToken(uniqueTokens[index], recipient.tokenPaths);
+    }
+  }));
 
   return { sent: response.successCount };
 });

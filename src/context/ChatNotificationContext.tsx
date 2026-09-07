@@ -10,6 +10,7 @@ import {
   showLocalNotification,
 } from '../services/notificationService';
 import { sendChatPushNotification } from '../services/pushChat';
+import { useAuth } from '../hooks/useAuth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ interface ChatNotificationContextValue {
   markThreadRead: (threadId: string, as: 'admin' | 'customer' | 'designer') => void;
   getThreadByCustomer: (customerId: string) => ChatThread | undefined;
   getDesignerThread: (designerName: string) => ChatThread | undefined;
-  ensureDesignerThread: (designerName: string, orderName?: string) => string;
+  ensureDesignerThread: (designerName: string, orderName?: string, designerId?: string) => string;
   createThreadForOrder: (customerId: string, customerName: string, order: OrderDetails) => void;
   upsertOrder: (order: Order) => void;
   approveOrder: (orderId: string) => void;
@@ -776,6 +777,7 @@ function sanitizeForFirebase<T>(data: T): T {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ChatNotificationProvider({ children }: { children: React.ReactNode }) {
+  const { user: currentUser } = useAuth();
   const storedState = removeDeletedSeedData(loadStoredChatState());
   const [threads, setThreads] = useState<ChatThread[]>(storedState ? parseThreadsFromState(storedState.threads) : INITIAL_THREADS);
   const [orders, setOrders] = useState<Order[]>(storedState ? readOrders(storedState) : INITIAL_ORDERS);
@@ -853,9 +855,35 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       if (pushType === 'chat-message') {
         const role = (payload.data?.role as 'customer' | 'admin' | 'designer' | undefined) || 'admin';
+        const targetUserId = payload.data?.userId || undefined;
+        const senderId = payload.data?.senderId || undefined;
+
+        // The browser's FCM registration token is shared across every open tab
+        // of this origin (it's tied to the Service Worker, not to whichever
+        // account happens to be logged into a given tab's sessionStorage). So a
+        // push addressed to the receiver's token can still fire this listener
+        // inside the SENDER's own tab if both accounts are open in the same
+        // browser. Cross-check against the user actually logged into THIS tab
+        // before surfacing anything, and never show the sender their own message.
+        const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
+        const isForThisUser = targetUserId ? currentUser?.id === targetUserId : myRole === role;
+        const isFromThisUser = !!senderId && !!currentUser?.id && senderId === currentUser.id;
+
+        console.log('[ChatPush][foreground]', {
+          senderId,
+          targetUserId,
+          targetRole: role,
+          currentUserId: currentUser?.id,
+          currentUserRole: myRole,
+          isForThisUser,
+          isFromThisUser,
+        });
+
+        if (!isForThisUser || isFromThisUser) return;
+
         addNotification({
           role,
-          userId: payload.data?.userId || undefined,
+          userId: targetUserId,
           title,
           body,
           time: 'Just now',
@@ -878,7 +906,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
 
     return () => unsub();
-  }, []);
+  }, [currentUser?.id, currentUser?.role]);
 
   const enablePushNotifications = useCallback(async (userId?: string) => {
     const res = await requestPushPermission(userId);
@@ -1120,7 +1148,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     return () => clearTimeout(timer);
   }, [threads, orders, users, notifications, notifCounter]);
 
-  const ensureDesignerThread = useCallback((designerName: string, orderName?: string) => {
+  const ensureDesignerThread = useCallback((designerName: string, orderName?: string, designerId?: string) => {
     const threadId = createDesignerThreadId(designerName);
 
     setThreads((prev) => {
@@ -1133,7 +1161,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const newThread: ChatThread = {
         id: threadId,
         customerName: designerName,
-        customerId: threadId,
+        // Prefer the designer's real user ID (needed for push targeting via
+        // targetUserId) — falls back to the thread ID only when the caller
+        // doesn't have it yet, matching prior behavior.
+        customerId: designerId || threadId,
         participantRole: 'designer',
         messages: [
           {
@@ -1497,6 +1528,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       // landed in `notifications` state yet at this point in the call.
       const badgeCount = notifications.filter((n) => n.role === 'admin' && !n.read).length + 1;
       sendChatPushNotification({
+        senderId: currentUser?.id || customerId,
         targetRole: 'admin',
         title: notifTitle,
         body: notifBody,
@@ -1504,7 +1536,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount,
       });
     },
-    [addNotification, notifications]
+    [addNotification, notifications, currentUser?.id]
   );
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
@@ -1534,7 +1566,19 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       type: 'chat',
       threadId: threadId,
     });
-  }, [addNotification]);
+
+    const notifTitle = `New message from Designer (${designerName})`;
+    const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
+    const badgeCount = notifications.filter((n) => n.role === 'admin' && !n.read).length + 1;
+    sendChatPushNotification({
+      senderId: currentUser?.id || threadId,
+      targetRole: 'admin',
+      title: notifTitle,
+      body: notifBody,
+      threadId,
+      badgeCount,
+    });
+  }, [addNotification, currentUser?.id, notifications]);
 
   const sendAdminMessage = useCallback((threadId: string, text: string, attachments: ChatAttachment[] = []) => {
     const msg: ChatMessage = {
@@ -1581,6 +1625,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const badgeCount =
         notifications.filter((n) => n.role === recipientRole && n.userId === thread.customerId && !n.read).length + 1;
       sendChatPushNotification({
+        senderId: currentUser?.id || 'unknown-sender',
         targetUserId: thread.customerId,
         title: notifTitle,
         body: notifBody,
@@ -1588,7 +1633,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount,
       });
     }
-  }, [threads, addNotification, notifications]);
+  }, [threads, addNotification, notifications, currentUser?.id, users]);
 
   const markThreadRead = useCallback((threadId: string, as: 'admin' | 'customer' | 'designer') => {
     setThreads((prev) =>
