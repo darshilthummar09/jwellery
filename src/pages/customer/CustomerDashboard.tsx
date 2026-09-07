@@ -3,14 +3,16 @@ import { useSearchParams } from 'react-router';
 import {
   ShoppingBag, Clock, CheckCircle2, Star, MessageCircle,
   Plus, Search, Filter, X, Send, Download, HeadphonesIcon,
-  FileText, Image as ImageIcon, Package, CheckCircle, Gem, Calendar, Paperclip
+  FileText, Image as ImageIcon, Package, CheckCircle, Gem, Calendar, Paperclip, Trash2
 } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { StatCard } from '../../components/common/StatCard';
 import { Avatar } from '../../components/common/Avatar';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatNotification } from '../../context/ChatNotificationContext';
+import type { Order } from '../../context/ChatNotificationContext';
 import { METAL_OPTIONS, KARAT_OPTIONS } from '../../constants/order-options';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 import { getStoredCategories } from '../../services/categoryService';
@@ -122,8 +124,11 @@ export function CustomerDashboard() {
     sendCustomerMessage,
     markThreadRead,
     deleteMessage,
+    deleteOrder,
     getChatUnreadCount,
   } = useChatNotification();
+
+  const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
 
   const customerId = user?.id ?? user?.email ?? 'customer';
   const customerName = user?.name ?? 'Customer';
@@ -587,14 +592,23 @@ export function CustomerDashboard() {
                           <p className="font-bold text-slate-800 text-xs">{order.due || order.created || 'To be scheduled'}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleOpenChatForOrder(order)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white text-xs font-semibold rounded-xl border border-emerald-200 hover:border-emerald-600 transition-all shadow-xs group/chat cursor-pointer"
-                        title="Open live chat about this order"
-                      >
-                        <MessageCircle size={14} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
-                        <span>Order Chat</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setDeletingOrder(order)}
+                          className="flex items-center justify-center w-9 h-9 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-xl border border-red-200 hover:border-red-600 transition-all shadow-xs cursor-pointer flex-shrink-0"
+                          title="Delete this order"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleOpenChatForOrder(order)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white text-xs font-semibold rounded-xl border border-emerald-200 hover:border-emerald-600 transition-all shadow-xs group/chat cursor-pointer"
+                          title="Open live chat about this order"
+                        >
+                          <MessageCircle size={14} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
+                          <span>Order Chat</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1077,6 +1091,19 @@ export function CustomerDashboard() {
             <p className="text-sm font-medium text-slate-300">{lightboxImage.name}</p>
           </div>
         </div>
+      )}
+
+      {deletingOrder && (
+        <ConfirmModal
+          title="Delete Order"
+          message={`Are you sure you want to delete ${deletingOrder.name}? This action cannot be undone.`}
+          confirmLabel="Delete Order"
+          onConfirm={() => {
+            deleteOrder(deletingOrder.id);
+            setDeletingOrder(null);
+          }}
+          onClose={() => setDeletingOrder(null)}
+        />
       )}
     </PageContainer>
   );
