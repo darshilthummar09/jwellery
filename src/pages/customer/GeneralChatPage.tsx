@@ -110,10 +110,12 @@ export function GeneralChatPage() {
     const my = threads.filter(
       (t) =>
         t.participantRole !== 'designer' &&
-        (t.customerId === customerId ||
+        (
+          t.customerId === customerId ||
           t.customerName.toLowerCase() === customerName.toLowerCase() ||
           t.id === `customer-${customerId}` ||
-          t.id === requestedThreadId)
+          t.id === requestedThreadId
+        )
     );
 
     // If no general thread exists in the list, create a virtual placeholder representation
