@@ -132,12 +132,12 @@ function NotificationBell() {
                       markNotificationRead(n.id);
                       setOpen(false);
                       if (n.type === 'chat' && n.threadId) {
-                        if (role === 'admin') {
+                        if (role === 'admin' || role === 'super-admin') {
                           navigate(`/dashboard/admin/chats?thread=${encodeURIComponent(n.threadId)}`);
                         } else if (role === 'customer') {
-                          navigate(`/dashboard/customer/chat`);
+                          navigate(`/dashboard/customer/chat?thread=${encodeURIComponent(n.threadId)}`);
                         } else if (role === 'designer') {
-                          navigate(`/dashboard/designer/chat`);
+                          navigate(`/dashboard/designer/chat?thread=${encodeURIComponent(n.threadId)}`);
                         }
                       } else if (n.type === 'order' && n.orderId) {
                         if (role === 'super-admin') {

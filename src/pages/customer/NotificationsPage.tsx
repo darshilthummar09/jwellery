@@ -65,7 +65,7 @@ export function CustomerNotificationsPage() {
   const handleNotificationClick = (n: AppNotification) => {
     markNotificationRead(n.id);
     if (n.type === 'chat' && n.threadId) {
-      navigate(`/dashboard/customer/chat`);
+      navigate(`/dashboard/customer/chat?thread=${encodeURIComponent(n.threadId)}`);
     } else if (n.type === 'order' && n.orderId) {
       navigate(`/dashboard/customer/my-products?id=${n.orderId}`);
     }

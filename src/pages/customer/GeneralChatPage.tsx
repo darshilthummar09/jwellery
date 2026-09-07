@@ -113,7 +113,7 @@ export function GeneralChatPage() {
         (t.customerId === customerId ||
           t.customerName.toLowerCase() === customerName.toLowerCase() ||
           t.id === `customer-${customerId}` ||
-          t.id.startsWith(`order-${customerId}`))
+          t.id === requestedThreadId)
     );
 
     // If no general thread exists in the list, create a virtual placeholder representation

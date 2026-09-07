@@ -67,10 +67,11 @@ export function AppRouter() {
                 <Route path="/dashboard/super-admin/dynamic-fields" element={<DynamicFieldsPage />} />
                 <Route path="/dashboard/super-admin/categories" element={<CategoriesPage />} />
                 <Route path="/dashboard/super-admin/settings" element={<SettingsPage />} />
+                <Route path="/dashboard/super-admin/chats" element={<ChatsPage />} />
               </Route>
 
               {/* Admin */}
-              <Route element={<RoleRoute allowedRoles={['admin']} />}>
+              <Route element={<RoleRoute allowedRoles={['admin', 'super-admin']} />}>
                 <Route path="/dashboard/admin" element={<AdminDashboard />} />
                 <Route path="/dashboard/admin/orders" element={<OrdersPage />} />
                 <Route path="/dashboard/admin/customers" element={<CustomersPage />} />

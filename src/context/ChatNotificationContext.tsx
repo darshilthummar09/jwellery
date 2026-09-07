@@ -310,16 +310,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
   // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
   useEffect(() => {
-    let currentRole: 'admin' | 'customer' | 'designer' = 'admin';
-    let currentCustId = '';
-    try {
-      const storedAuth = localStorage.getItem('auth_user') || sessionStorage.getItem('auth_user');
-      if (storedAuth) {
-        const u = JSON.parse(storedAuth);
-        if (u.role) currentRole = u.role === 'super-admin' ? 'admin' : u.role;
-        if (u.id) currentCustId = u.id;
-      }
-    } catch {}
+    const currentRole = currentUser?.role === 'super-admin' ? 'admin' : (currentUser?.role || 'admin');
+    const currentCustId = currentUser?.id || '';
 
     const unreadNotifications = notifications.filter((n) => {
       if (n.read) return false;
@@ -355,7 +347,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         document.title = baseTitle;
       }
     } catch {}
-  }, [notifications, threads]);
+  }, [notifications, threads, currentUser?.role, currentUser?.id]);
 
   // ─── Foreground Push Notification Listener ──────────────────────────────────
   useEffect(() => {
@@ -444,16 +436,25 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
     setNotifCounter((c) => c + items.length);
 
-    // Trigger local desktop banner & Web Audio sound
+    // Trigger local desktop banner & Web Audio sound — but only for the item
+    // actually addressed to whoever is logged into THIS tab. addNotification
+    // is called by the sender's own code (e.g. sendAdminMessage queues a
+    // 'customer'-role entry for the recipient) so without this check the
+    // sender's own browser would pop a banner meant for the other party.
     try {
-      const first = items[0];
-      if (first) {
-        showLocalNotification(first.title, { body: first.body });
+      const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
+      const relevant = items.find((item) => {
+        if (item.role !== myRole) return false;
+        if (item.userId && currentUser?.id && item.userId !== currentUser.id) return false;
+        return true;
+      });
+      if (relevant) {
+        showLocalNotification(relevant.title, { body: relevant.body });
       }
     } catch (e) {
       console.debug('Notification trigger notice:', e);
     }
-  }, []);
+  }, [currentUser?.id, currentUser?.role]);
 
   const nowTime = () =>
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -748,11 +749,14 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         lastTime: '',
       };
 
-      const updated = [newThread, ...prev];
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
+      // Deliberately NOT writing to Firebase directly here. `prev` is this
+      // tab's local state, which may not have hydrated from Firebase yet
+      // (e.g. right after a fresh page load) — an immediate set() at that
+      // point would overwrite the real chatState/threads node with a
+      // snapshot that's missing this order's actual message history. The
+      // debounced sync effect below persists this the same way every other
+      // thread mutation does, but only once hydration has been confirmed.
+      return [newThread, ...prev];
     });
 
     return threadId;
@@ -835,11 +839,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           lastMessage: `New order: ${orderName}`,
           lastTime: 'Just now',
         };
-        const updated = [newThread, ...prev.filter((t) => t.id !== threadId)];
-        if (firebaseDatabase) {
-          set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-        }
-        return updated;
+        // Same reasoning as ensureThreadForOrder: let the debounced sync
+        // effect persist this once hydration is confirmed, rather than
+        // writing `prev` (possibly stale local state) straight to Firebase.
+        return [newThread, ...prev.filter((t) => t.id !== threadId)];
       });
 
       const newOrder: Order = {
@@ -896,7 +899,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           time: 'Just now',
           read: false,
           type: 'chat',
-          threadId: `customer-${customerId}`,
+          threadId: `order-${orderId}`,
           orderId: orderId,
         }
       ]);
@@ -1066,12 +1069,25 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           );
         }
 
+        const initialMessages: ChatMessage[] = [];
+        if (targetThreadId === `customer-${customerId}`) {
+          initialMessages.push({
+            id: Date.now() - 1000,
+            from: 'admin',
+            senderName: 'Dream Jewels Support',
+            text: `👋 Welcome to Dream Jewels, ${customerName}! How can our master jewelers assist you today?`,
+            time: nowTime(),
+            seenBy: ['customer'],
+          });
+        }
+        initialMessages.push(msg);
+
         const newThread: ChatThread = {
           id: targetThreadId,
           customerName,
           customerId,
           participantRole: 'customer',
-          messages: [msg],
+          messages: initialMessages,
           unread: 1,
           customerUnread: 0,
           lastMessage: formatLastMessage(text, attachments),
@@ -1315,18 +1331,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
   const triggerTestNotification = useCallback(
     (type: 'order_created' | 'order_approved' | 'order_rejected' | 'order_progress' | 'chat_message' | 'system_alert') => {
-      let currentRole: 'admin' | 'customer' | 'designer' = 'admin';
-      let currentCustId = 'cust-1';
-      let currentUserName = 'Priya Patel';
-      try {
-        const storedAuth = localStorage.getItem('auth_user') || sessionStorage.getItem('auth_user');
-        if (storedAuth) {
-          const u = JSON.parse(storedAuth);
-          if (u.role) currentRole = u.role === 'super-admin' ? 'admin' : u.role;
-          if (u.id) currentCustId = u.id;
-          if (u.name) currentUserName = u.name;
-        }
-      } catch {}
+      const currentRole = currentUser?.role === 'super-admin' ? 'admin' : (currentUser?.role || 'admin');
+      const currentCustId = currentUser?.id || 'usr-cust-1';
+      const currentUserName = currentUser?.name || 'Customer';
 
       const testOrderId = `ORD-${Date.now().toString().slice(-4)}`;
 

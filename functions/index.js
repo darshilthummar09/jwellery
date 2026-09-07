@@ -111,7 +111,7 @@ async function collectTokensForUser(userId) {
 async function collectTokensForRole(role, senderId) {
   const usersSnap = await db.ref('users').once('value');
   const usersVal = usersSnap.val();
-  if (!usersVal) return [];
+  if (!usersVal) return { tokens: [], tokenPaths: new Map() };
 
   const users = Array.isArray(usersVal) ? usersVal : Object.values(usersVal);
   const matchedIds = users
@@ -156,6 +156,10 @@ exports.sendChatPush = onCall(async (request) => {
     return { sent: 0 };
   }
 
+  const targetUrl = targetRole === 'admin'
+    ? (threadId ? `/dashboard/admin/chats?thread=${encodeURIComponent(threadId)}` : '/dashboard/admin/chats')
+    : (threadId ? `/dashboard/customer/chat?thread=${encodeURIComponent(threadId)}` : '/dashboard/customer/chat');
+
   const data = {
     type: 'chat-message',
     threadId: threadId || '',
@@ -164,6 +168,7 @@ exports.sendChatPush = onCall(async (request) => {
     userId: targetUserId || '',
     senderId: senderId || '',
     badgeCount: badgeCount !== undefined && badgeCount !== null ? String(badgeCount) : '',
+    url: targetUrl,
   };
 
   const response = await messaging.sendEachForMulticast({
