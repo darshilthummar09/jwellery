@@ -305,6 +305,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(getPushPermissionState());
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const lastSerializedStateRef = useRef('');
+  const isFirstSyncRunRef = useRef(true);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
@@ -636,6 +637,20 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
     const serialized = JSON.stringify(payload);
     if (serialized === lastSerializedStateRef.current) return;
+
+    // The very first run of this effect fires with whatever state was
+    // hydrated at mount (from localStorage, or the empty defaults) — before
+    // the Firebase listeners above have had a chance to fetch the real,
+    // up-to-date data for this device. Writing that snapshot up to Firebase
+    // right away can race the read and clobber a message that was sent from
+    // another tab/device moments earlier (the classic "I refresh and my
+    // message is gone" bug). Once the listeners' onValue fires, they update
+    // this same state, which re-runs this effect — that's when writes start.
+    if (isFirstSyncRunRef.current) {
+      isFirstSyncRunRef.current = false;
+      lastSerializedStateRef.current = serialized;
+      return;
+    }
 
     lastSerializedStateRef.current = serialized;
 

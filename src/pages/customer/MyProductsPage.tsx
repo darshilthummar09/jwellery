@@ -156,6 +156,9 @@ function ProductCard({ order, onDelete }: { order: Order; onDelete: (order: Orde
         </div>
 
         <p className="text-xs text-slate-400 mb-3">
+          <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono mr-1.5">
+            #{order.id}
+          </span>
           {order.category}
           {order.metal ? ` · ${order.metal}` : ''}
           {order.karat ? ` (${order.karat})` : ''}

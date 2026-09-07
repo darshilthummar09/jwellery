@@ -518,9 +518,14 @@ export function CustomerDashboard() {
                   {/* Card Content */}
                   <div className="p-5 flex flex-col flex-1">
                     <div className="mb-2">
-                      <h3 className="font-bold text-slate-900 text-base leading-tight group-hover:text-emerald-700 transition-colors">
-                        {order.name}
-                      </h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-slate-900 text-base leading-tight group-hover:text-emerald-700 transition-colors">
+                          {order.name}
+                        </h3>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono flex-shrink-0">
+                          #{order.id}
+                        </span>
+                      </div>
                       <p className="text-xs text-slate-400 mt-1">
                         {order.category} · {order.metal} ({order.karat})
                       </p>
