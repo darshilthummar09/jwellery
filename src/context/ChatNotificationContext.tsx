@@ -929,7 +929,14 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           const andText = statusChanged && progressChanged ? ' and ' : '';
           const changeDesc = `${statusText}${andText}${progressText}`;
 
-          addNotification([
+          // Only notify the customer about their order being updated.
+          // Skip the admin self-notification entirely when admin/super-admin is
+          // the one making the change — they already see the update on screen.
+          // Only add admin notification when a designer (non-admin) actor made the change.
+          const actorRole = currentUser?.role;
+          const isAdminActor = actorRole === 'admin' || actorRole === 'super-admin';
+
+          const notificationsToAdd: Array<Omit<AppNotification, 'id'>> = [
             {
               role: 'customer',
               userId: order.customerId,
@@ -940,7 +947,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
               type: 'order',
               orderId: order.id,
             },
-            {
+          ];
+
+          if (!isAdminActor) {
+            notificationsToAdd.push({
               role: 'admin',
               title: `Order Update: ${order.name}`,
               body: `Designer ${order.designerName} updated ${changeDesc}.`,
@@ -948,14 +958,16 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
               read: false,
               type: 'order',
               orderId: order.id,
-            }
-          ]);
+            });
+          }
+
+          addNotification(notificationsToAdd);
         }
       }
 
       return updated;
     });
-  }, [addNotification]);
+  }, [addNotification, currentUser?.role]);
 
   // Approval only flips the status.
   const approveOrder = useCallback((orderId: string) => {
@@ -1173,7 +1185,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       senderName: 'Dream Jewels Support',
       text,
       time: nowTime(),
-      attachments,
+      attachments: attachments.length > 0 ? attachments : undefined,
       seenBy: [],
     };
     setThreads((prev) =>
