@@ -19,6 +19,7 @@ import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { Avatar } from '../../components/common/Avatar';
 import { EmptyState } from '../../components/common/EmptyState';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { ChatAttachment, useChatNotification } from '../../context/ChatNotificationContext';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 
@@ -111,7 +112,7 @@ function AttachmentList({
 }
 
 export function ChatsPage() {
-  const { threads, orders, sendAdminMessage, markThreadRead, deleteMessage } = useChatNotification();
+  const { threads, orders, sendAdminMessage, markThreadRead, deleteMessage, deleteThread } = useChatNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const requestedThreadId = searchParams.get('thread');
@@ -123,14 +124,22 @@ export function ChatsPage() {
   const [input, setInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
 
+  // Most-recently-active conversation first, like WhatsApp — a thread's last
+  // message id is a Date.now()-based timestamp, so it doubles as a recency key.
+  const sortedThreads = useMemo(() => {
+    const recencyOf = (t: (typeof threads)[number]) => t.messages[t.messages.length - 1]?.id ?? 0;
+    return [...threads].sort((a, b) => recencyOf(b) - recencyOf(a));
+  }, [threads]);
+
   // Filtered threads list
   const filteredThreads = useMemo(() => {
-    return threads.filter((t) => {
+    return sortedThreads.filter((t) => {
       if (filterTab === 'Unread' && t.unread <= 0) return false;
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
@@ -141,7 +150,7 @@ export function ChatsPage() {
         t.lastMessage.toLowerCase().includes(q)
       );
     });
-  }, [threads, filterTab, searchQuery]);
+  }, [sortedThreads, filterTab, searchQuery]);
 
   useEffect(() => {
     if (requestedThreadId && threads.some((thread) => thread.id === requestedThreadId)) {
@@ -414,6 +423,13 @@ export function ChatsPage() {
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span>Live</span>
                     </div>
+                    <button
+                      onClick={() => setDeletingThreadId(selectedThread.id)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                      title="Delete this conversation"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
 
@@ -655,6 +671,23 @@ export function ChatsPage() {
             <p className="text-sm font-medium text-slate-300">{lightboxImage.name}</p>
           </div>
         </div>
+      )}
+
+      {deletingThreadId && (
+        <ConfirmModal
+          title="Delete Conversation"
+          message="Are you sure you want to delete this entire conversation? All messages in it will be permanently removed."
+          confirmLabel="Delete Conversation"
+          onConfirm={() => {
+            deleteThread(deletingThreadId);
+            if (selectedThreadId === deletingThreadId) {
+              const remaining = threads.filter((t) => t.id !== deletingThreadId);
+              setSelectedThreadId(remaining.length > 0 ? remaining[0].id : null);
+            }
+            setDeletingThreadId(null);
+          }}
+          onClose={() => setDeletingThreadId(null)}
+        />
       )}
     </div>
   );

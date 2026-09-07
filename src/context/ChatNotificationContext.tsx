@@ -136,6 +136,7 @@ interface ChatNotificationContextValue {
   getThreadByCustomer: (customerId: string) => ChatThread | undefined;
   getDesignerThread: (designerName: string) => ChatThread | undefined;
   ensureDesignerThread: (designerName: string, orderName?: string, designerId?: string) => string;
+  ensureThreadForOrder: (order: Order) => string;
   createThreadForOrder: (customerId: string, customerName: string, order: OrderDetails) => void;
   upsertOrder: (order: Order) => void;
   approveOrder: (orderId: string) => void;
@@ -152,6 +153,7 @@ interface ChatNotificationContextValue {
   ) => void;
   seedOrderTestChats: () => void;
   deleteMessage: (threadId: string, messageId: number) => void;
+  deleteThread: (threadId: string) => void;
   enablePushNotifications: (userId?: string) => Promise<{ success: boolean; error?: string }>;
   pushPermission: NotificationPermission | 'unsupported';
   setAppBadgeCount: (count: number) => Promise<void>;
@@ -1188,6 +1190,43 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     return threadId;
   }, []);
 
+  // Order-wise chat threads used to only get created via createThreadForOrder
+  // (the customer's own "request custom order" flow). Orders an admin adds
+  // manually never went through that path, so their thread was missing —
+  // sendAdminMessage would silently drop the first message because there was
+  // no matching thread to append it to. Call this before opening/navigating
+  // to an order's chat so the thread (and its Conversations list entry)
+  // always exists first.
+  const ensureThreadForOrder = useCallback((order: Order) => {
+    const threadId = `order-${order.id}`;
+
+    setThreads((prev) => {
+      if (prev.some((t) => t.id === threadId)) return prev;
+
+      const newThread: ChatThread = {
+        id: threadId,
+        orderId: order.id,
+        orderName: order.name,
+        customerName: order.customerName,
+        customerId: order.customerId,
+        participantRole: 'customer',
+        messages: [],
+        unread: 0,
+        customerUnread: 0,
+        lastMessage: 'No messages yet',
+        lastTime: '',
+      };
+
+      const updated = [newThread, ...prev];
+      if (firebaseDatabase) {
+        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
+      }
+      return updated;
+    });
+
+    return threadId;
+  }, []);
+
   const createThreadForOrder = useCallback(
     (customerId: string, customerName: string, order: OrderDetails) => {
       const orderName = order.name;
@@ -1873,6 +1912,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     );
   }, []);
 
+  const deleteThread = useCallback((threadId: string) => {
+    setThreads((prev) => prev.filter((t) => t.id !== threadId));
+  }, []);
+
   const addUser = useCallback((newUser: User & { password?: string }) => {
     setUsers((prev) => {
       const updated = [newUser, ...prev.filter((u) => u.id !== newUser.id)];
@@ -1909,6 +1952,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         getThreadByCustomer,
         getDesignerThread,
         ensureDesignerThread,
+        ensureThreadForOrder,
         createThreadForOrder,
         upsertOrder,
         approveOrder,
@@ -1923,6 +1967,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         triggerTestNotification,
         seedOrderTestChats,
         deleteMessage,
+        deleteThread,
         enablePushNotifications,
         pushPermission,
         setAppBadgeCount: setAppBadge,

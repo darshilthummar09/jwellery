@@ -12,9 +12,11 @@ import {
   X,
   MessageCircle,
   Calendar,
+  Trash2,
 } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useChatNotification } from '../../context/ChatNotificationContext';
 import type { OrderAttachment, OrderDetails, Order } from '../../context/ChatNotificationContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -125,7 +127,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
-function ProductCard({ order }: { order: Order }) {
+function ProductCard({ order, onDelete }: { order: Order; onDelete: (order: Order) => void }) {
   const navigate = useNavigate();
   const emoji = CATEGORY_EMOJIS[order.category] || '👑';
 
@@ -224,14 +226,23 @@ function ProductCard({ order }: { order: Order }) {
               <p className="font-bold text-slate-800 text-xs">{order.due || order.created || 'To be scheduled'}</p>
             </div>
           </div>
-          <button
-            onClick={() => navigate(`/dashboard/customer/chat?orderId=${encodeURIComponent(order.id)}&orderName=${encodeURIComponent(order.name)}`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white text-xs font-semibold rounded-xl border border-emerald-200 hover:border-emerald-600 transition-all shadow-xs group/chat cursor-pointer"
-            title="Chat with support about this piece"
-          >
-            <MessageCircle size={13} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
-            <span>Chat</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onDelete(order)}
+              className="flex items-center justify-center w-8 h-8 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-xl border border-red-200 hover:border-red-600 transition-all shadow-xs cursor-pointer"
+              title="Delete this order"
+            >
+              <Trash2 size={13} />
+            </button>
+            <button
+              onClick={() => navigate(`/dashboard/customer/chat?orderId=${encodeURIComponent(order.id)}&orderName=${encodeURIComponent(order.name)}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white text-xs font-semibold rounded-xl border border-emerald-200 hover:border-emerald-600 transition-all shadow-xs group/chat cursor-pointer"
+              title="Chat with support about this piece"
+            >
+              <MessageCircle size={13} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
+              <span>Chat</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -243,7 +254,8 @@ function ProductCard({ order }: { order: Order }) {
 export function MyProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const { createThreadForOrder, orders } = useChatNotification();
+  const { createThreadForOrder, deleteOrder, orders } = useChatNotification();
+  const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
 
   // Derive customer's orders DIRECTLY from the shared orders context — never
   // use a separate localStorage list, so status updates from the admin always
@@ -467,7 +479,7 @@ export function MyProductsPage() {
           {/* ── Product grid ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {myOrders.map((order) => (
-              <ProductCard key={order.id} order={order} />
+              <ProductCard key={order.id} order={order} onDelete={setDeletingOrder} />
             ))}
           </div>
         </>
@@ -690,6 +702,19 @@ export function MyProductsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {deletingOrder && (
+        <ConfirmModal
+          title="Delete Order"
+          message={`Are you sure you want to delete ${deletingOrder.name}? This action cannot be undone.`}
+          confirmLabel="Delete Order"
+          onConfirm={() => {
+            deleteOrder(deletingOrder.id);
+            setDeletingOrder(null);
+          }}
+          onClose={() => setDeletingOrder(null)}
+        />
+      )}
     </PageContainer>
   );
 }
