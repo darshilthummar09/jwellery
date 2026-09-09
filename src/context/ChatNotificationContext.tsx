@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { onValue, ref, set } from 'firebase/database';
+import { onValue, ref, set, get } from 'firebase/database';
 import { firebaseDatabase, isFirebaseConfigured } from '../services/firebase';
 import {
   setAppBadge,
@@ -285,6 +285,42 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 function removeDeletedSeedData(state: StoredChatState | null): StoredChatState | null {
   if (!state) return null;
   return state;
+}
+
+/** Merges two message arrays by id so a concurrent write from another device can't discard either side's messages. */
+function mergeMessages(local: ChatMessage[], remote: ChatMessage[]): ChatMessage[] {
+  const byId = new Map<number, ChatMessage>();
+  remote.forEach((m) => byId.set(m.id, m));
+  local.forEach((m) => byId.set(m.id, m));
+  return Array.from(byId.values()).sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Merges two thread arrays by id, unioning each shared thread's messages
+ * instead of a blind overwrite. Every device debounce-writes its ENTIRE local
+ * `threads` snapshot to Firebase; if two devices write around the same time,
+ * whichever write lands last used to silently erase whatever message the
+ * other device had just added (the "I send a message but it's not stored"
+ * bug) since there was no merge, only last-write-wins.
+ */
+function mergeThreads(local: ChatThread[], remote: ChatThread[]): ChatThread[] {
+  const byId = new Map<string, ChatThread>();
+  remote.forEach((t) => byId.set(t.id, t));
+  local.forEach((t) => {
+    const existing = byId.get(t.id);
+    byId.set(t.id, existing
+      ? { ...existing, ...t, messages: mergeMessages(t.messages, existing.messages) }
+      : t);
+  });
+  return Array.from(byId.values());
+}
+
+/** Merges two notification arrays by id for the same reason as mergeThreads. */
+function mergeNotifications(local: AppNotification[], remote: AppNotification[]): AppNotification[] {
+  const byId = new Map<number, AppNotification>();
+  remote.forEach((n) => byId.set(n.id, n));
+  local.forEach((n) => byId.set(n.id, n));
+  return Array.from(byId.values()).sort((a, b) => b.id - a.id);
 }
 
 /** Strips undefined properties so Firebase Realtime Database set() never rejects */
@@ -673,7 +709,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     lastSerializedStateRef.current = serialized;
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       // Update LocalStorage & BroadcastChannel
       try {
         window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
@@ -690,7 +726,36 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         try {
           set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(orders)).catch(() => {});
           set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(users)).catch(() => {});
-          set(ref(firebaseDatabase, 'chatState'), payload).catch(() => {});
+
+          // Read-merge-write for chatState instead of overwriting with this
+          // device's local snapshot: if another device wrote a new message
+          // in the ~250ms since this device last synced, an unconditional
+          // set() here would clobber it. Merging by id unions both sides'
+          // messages/notifications so neither device's write is ever lost.
+          const chatStateRef = ref(firebaseDatabase, 'chatState');
+          const remoteSnap = await get(chatStateRef);
+          const remote = (remoteSnap.val() as StoredChatState) || {};
+          const remoteThreads = parseThreadsFromState(remote.threads);
+          const remoteNotifs = parseNotificationsFromState(remote.notifications);
+
+          const mergedThreads = mergeThreads(threads, remoteThreads);
+          const mergedNotifs = mergeNotifications(notifications, remoteNotifs);
+          const mergedCounter = Math.max(notifCounter, remote.notifCounter ?? 0);
+
+          await set(chatStateRef, sanitizeForFirebase({
+            threads: mergedThreads,
+            notifications: mergedNotifs,
+            notifCounter: mergedCounter,
+          }));
+
+          // Reflect the merge back locally so this device doesn't keep
+          // re-sending a snapshot that's missing what the other device wrote.
+          setThreads((prev) =>
+            JSON.stringify(sanitizeForFirebase(prev)) === JSON.stringify(sanitizeForFirebase(mergedThreads)) ? prev : mergedThreads
+          );
+          setNotifications((prev) =>
+            JSON.stringify(sanitizeForFirebase(prev)) === JSON.stringify(sanitizeForFirebase(mergedNotifs)) ? prev : mergedNotifs
+          );
         } catch (e) {
           console.error('Failed to save state to Firebase:', e);
         }

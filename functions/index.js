@@ -142,14 +142,22 @@ exports.sendChatPush = onCall(async (request) => {
     ? await collectTokensForUser(targetUserId)
     : await collectTokensForRole(targetRole, senderId);
 
-  const sender = await collectTokensForUser(senderId);
-  const senderTokens = new Set(sender.tokens);
-  const uniqueTokens = [...new Set(recipient.tokens)].filter((token) => !senderTokens.has(token));
+  // NOTE: recipients are already excluded-by-account-id above (collectTokensForRole
+  // drops senderId from its candidate users; the targetUserId path only ever
+  // looks up the one specific *other* account being messaged). We deliberately
+  // do NOT also filter out any token that happens to match one of the sender's
+  // own registered tokens: an FCM token is tied to the browser's Service
+  // Worker installation, not to whichever account is logged into a given tab,
+  // so testing admin and customer accounts in the same browser makes both
+  // accounts register the identical token. Excluding "the sender's token"
+  // then wrongly excluded the recipient's only token too, silently dropping
+  // every push. The client already guards the sender from seeing their own
+  // message as a push banner (see the isFromThisUser check in
+  // ChatNotificationContext's foreground listener).
+  const uniqueTokens = [...new Set(recipient.tokens)];
 
   console.log('[sendChatPush] Sender ID:', senderId);
   console.log('[sendChatPush] Receiver ID:', targetUserId || `role:${targetRole}`);
-  console.log('[sendChatPush] Sender FCM Token:', [...senderTokens]);
-  console.log('[sendChatPush] Receiver FCM Token:', [...new Set(recipient.tokens)]);
   console.log('[sendChatPush] Notification Target Token:', uniqueTokens);
 
   if (uniqueTokens.length === 0) {
