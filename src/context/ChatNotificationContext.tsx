@@ -349,9 +349,17 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     } catch {}
   }, [notifications, threads, currentUser?.role, currentUser?.id]);
 
-  // ─── Automatic FCM Token Session Sync ──────────────────────────────────────
+  // ─── Automatic FCM Token Session Sync (Once Per User Session) ───────────────
+  const hasSyncedFcmTokenRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (currentUser?.id && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (
+      currentUser?.id &&
+      hasSyncedFcmTokenRef.current !== currentUser.id &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
+      hasSyncedFcmTokenRef.current = currentUser.id;
       requestPushPermission(currentUser.id).catch((err) => {
         console.debug('Auto push registration notice:', err);
       });

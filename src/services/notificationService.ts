@@ -108,10 +108,18 @@ export const requestPushPermission = async (userId?: string): Promise<{
       return { success: false, error: 'Notification permission was denied or dismissed.' };
     }
 
-    // 2. Register Service Worker
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-      scope: '/',
-    });
+    // 2. Register Service Worker (reuse if already active)
+    let registration: ServiceWorkerRegistration | undefined;
+    try {
+      const existing = await navigator.serviceWorker.getRegistrations();
+      registration = existing.find((r) => r.active?.scriptURL.includes('firebase-messaging-sw.js'));
+    } catch {}
+
+    if (!registration) {
+      registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+        scope: '/',
+      });
+    }
     await navigator.serviceWorker.ready;
 
     // 3. Initialize Firebase Messaging
