@@ -61,8 +61,8 @@ function NotificationBell() {
 
   const handleViewAll = () => {
     setOpen(false);
-    if (role === 'super-admin') navigate('/dashboard/super-admin/settings');
-    else if (role === 'admin') navigate('/dashboard/admin/orders');
+    if (role === 'super-admin') navigate('/dashboard/super-admin/notifications');
+    else if (role === 'admin') navigate('/dashboard/admin/notifications');
     else if (role === 'customer') navigate('/dashboard/customer/notifications');
     else if (role === 'designer') navigate('/dashboard/designer/notifications');
   };

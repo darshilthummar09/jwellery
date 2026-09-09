@@ -411,17 +411,16 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
         if (!isForThisUser || isFromThisUser) return;
 
-        addNotification({
-          role,
-          userId: targetUserId,
-          title,
-          body,
-          time: 'Just now',
-          read: false,
-          type: 'chat',
-          threadId: payload.data?.threadId || undefined,
-          orderId: payload.data?.orderId || undefined,
-        });
+        // Don't call addNotification here: the sender already added this
+        // exact notification to the shared `notifications` state (see
+        // sendCustomerMessage/sendAdminMessage/sendDesignerMessage), which
+        // syncs to this device via the Firebase chatState listener above.
+        // Calling addNotification a second time on push receipt inserted a
+        // duplicate entry (with a different id) into the shared, persisted
+        // list — showing the same message twice and permanently doubling
+        // notification history. The push's only job here is to surface the
+        // banner/chime immediately, since the state-sync path is silent.
+        showLocalNotification(title, { body });
         return;
       }
 

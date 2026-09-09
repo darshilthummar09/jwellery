@@ -20,6 +20,7 @@ import { OrdersPage } from '../pages/admin/OrdersPage';
 import { CustomersPage } from '../pages/admin/CustomersPage';
 // import { DesignersPage } from '../pages/admin/DesignersPage';
 import { ChatsPage } from '../pages/admin/ChatsPage';
+import { AdminNotificationsPage } from '../pages/admin/NotificationsPage';
 
 // Customer Pages
 import { CustomerDashboard } from '../pages/customer/CustomerDashboard';
@@ -68,6 +69,7 @@ export function AppRouter() {
                 <Route path="/dashboard/super-admin/categories" element={<CategoriesPage />} />
                 <Route path="/dashboard/super-admin/settings" element={<SettingsPage />} />
                 <Route path="/dashboard/super-admin/chats" element={<ChatsPage />} />
+                <Route path="/dashboard/super-admin/notifications" element={<AdminNotificationsPage />} />
               </Route>
 
               {/* Admin */}
@@ -77,6 +79,7 @@ export function AppRouter() {
                 <Route path="/dashboard/admin/customers" element={<CustomersPage />} />
                 {/* <Route path="/dashboard/admin/designers" element={<DesignersPage />} /> */}
                 <Route path="/dashboard/admin/chats" element={<ChatsPage />} />
+                <Route path="/dashboard/admin/notifications" element={<AdminNotificationsPage />} />
               </Route>
 
               {/* Customer */}

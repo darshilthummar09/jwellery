@@ -14,6 +14,7 @@ export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: 'Dynamic Fields', path: '/dashboard/super-admin/dynamic-fields',icon: 'Sliders',         description: 'Custom field management' },
   { label: 'Categories',     path: '/dashboard/super-admin/categories',    icon: 'Tag',             description: 'Product categories' },
   { label: 'Settings',       path: '/dashboard/super-admin/settings',      icon: 'Settings',        description: 'System settings' },
+  { label: 'Notifications',  path: '/dashboard/super-admin/notifications', icon: 'Bell',            description: 'Order & chat alerts' },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
@@ -22,6 +23,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: 'Customers',  path: '/dashboard/admin/customers',  icon: 'UserCheck',       description: 'Manage customers' },
   // { label: 'Designers',  path: '/dashboard/admin/designers',  icon: 'Palette',         description: 'Manage designers' },
   { label: 'Chats',      path: '/dashboard/admin/chats',      icon: 'MessageSquare',   description: 'Customer chats' },
+  { label: 'Notifications', path: '/dashboard/admin/notifications', icon: 'Bell',      description: 'Order & chat alerts' },
 ];
 
 export const CUSTOMER_NAV: NavItem[] = [
