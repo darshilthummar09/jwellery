@@ -112,12 +112,31 @@ export const requestPushPermission = async (userId?: string): Promise<{
     let registration: ServiceWorkerRegistration | undefined;
     try {
       const existing = await navigator.serviceWorker.getRegistrations();
-      registration = existing.find((r) => r.active?.scriptURL.includes('firebase-messaging-sw.js'));
+      for (const r of existing) {
+        if (!r.active?.scriptURL.includes('firebase-messaging-sw.js')) continue;
+        // Self-heal browsers that already have this SW registered at scope
+        // '/' from before the dedicated push scope existed — leaving that
+        // stale registration in place would keep it fighting the main PWA
+        // service worker for control of '/' and reintroduce the reload loop.
+        if (!r.scope.includes('firebase-cloud-messaging-push-scope')) {
+          await r.unregister().catch(() => {});
+          continue;
+        }
+        registration = r;
+      }
     } catch {}
 
     if (!registration) {
+      // Scoped away from '/' on purpose: the main PWA service worker
+      // (registered via registerSW in main.tsx) also controls scope '/'.
+      // Two different scripts fighting over the same scope makes the browser
+      // repeatedly swap which one controls the page, firing 'controllerchange'
+      // each time — and since the PWA is registered with autoUpdate, every
+      // one of those swaps triggers an automatic page reload. That's what
+      // was causing refresh-on-refresh loops (worst on pull-to-refresh/hard
+      // reload, which is exactly what re-triggers this registration).
       registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-        scope: '/',
+        scope: '/firebase-cloud-messaging-push-scope',
       });
     }
     await navigator.serviceWorker.ready;
