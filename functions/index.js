@@ -156,7 +156,8 @@ exports.sendChatPush = onCall(async (request) => {
     return { sent: 0 };
   }
 
-  const targetUrl = targetRole === 'admin'
+  const effectiveRole = targetRole || (targetUserId ? 'customer' : 'admin');
+  const targetUrl = effectiveRole === 'admin'
     ? (threadId ? `/dashboard/admin/chats?thread=${encodeURIComponent(threadId)}` : '/dashboard/admin/chats')
     : (threadId ? `/dashboard/customer/chat?thread=${encodeURIComponent(threadId)}` : '/dashboard/customer/chat');
 
@@ -164,7 +165,7 @@ exports.sendChatPush = onCall(async (request) => {
     type: 'chat-message',
     threadId: threadId || '',
     orderId: orderId || '',
-    role: targetRole || '',
+    role: effectiveRole,
     userId: targetUserId || '',
     senderId: senderId || '',
     badgeCount: badgeCount !== undefined && badgeCount !== null ? String(badgeCount) : '',

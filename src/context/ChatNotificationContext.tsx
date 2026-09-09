@@ -349,6 +349,15 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     } catch {}
   }, [notifications, threads, currentUser?.role, currentUser?.id]);
 
+  // ─── Automatic FCM Token Session Sync ──────────────────────────────────────
+  useEffect(() => {
+    if (currentUser?.id && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      requestPushPermission(currentUser.id).catch((err) => {
+        console.debug('Auto push registration notice:', err);
+      });
+    }
+  }, [currentUser?.id]);
+
   // ─── Foreground Push Notification Listener ──────────────────────────────────
   useEffect(() => {
     const unsub = registerForegroundPushListener((payload) => {
@@ -365,9 +374,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       }
 
       if (pushType === 'chat-message') {
-        const role = (payload.data?.role as 'customer' | 'admin' | 'designer' | undefined) || 'admin';
         const targetUserId = payload.data?.userId || undefined;
         const senderId = payload.data?.senderId || undefined;
+        const role =
+          (payload.data?.role as 'customer' | 'admin' | 'designer' | undefined) ||
+          (targetUserId ? 'customer' : 'admin');
 
         // The browser's FCM registration token is shared across every open tab
         // of this origin (it's tied to the Service Worker, not to whichever
@@ -1225,6 +1236,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       sendChatPushNotification({
         senderId: currentUser?.id || 'unknown-sender',
         targetUserId: thread.customerId,
+        targetRole: recipientRole,
         title: notifTitle,
         body: notifBody,
         threadId,

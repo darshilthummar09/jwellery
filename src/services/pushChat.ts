@@ -15,8 +15,8 @@ export interface ChatPushPayload {
   senderId: string;
   /** Push a specific user's current device (e.g. a single customer). */
   targetUserId?: string;
-  /** Push every currently-logged-in device for a role's shared inbox (e.g. 'admin'). */
-  targetRole?: 'admin';
+  /** Push every currently-logged-in device for a role's shared inbox (e.g. 'admin') or target role. */
+  targetRole?: 'admin' | 'customer' | 'designer';
   title: string;
   body: string;
   threadId?: string;
