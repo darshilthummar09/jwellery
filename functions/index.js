@@ -90,21 +90,58 @@ async function collectTokensForUser(userId) {
   const tokenPaths = new Map();
   const tokens = [];
   const addToken = (token, path) => {
-    if (!token) return;
-    tokens.push(token);
+    if (!token || typeof token !== 'string') return;
+    if (!tokens.includes(token)) {
+      tokens.push(token);
+    }
     if (!tokenPaths.has(token)) tokenPaths.set(token, []);
     tokenPaths.get(token).push(path);
   };
 
+  // 1. Primary: Active session token (current active device)
+  const sessionSnap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
+  const sessionToken = sessionSnap.val();
+  if (sessionToken && typeof sessionToken === 'string') {
+    addToken(sessionToken, `activeSessions/${userId}/fcmToken`);
+    return { tokens, tokenPaths };
+  }
+
+  // 2. Fallback: Most recent token under userTokens
   const storedTokensSnap = await db.ref(`userTokens/${userId}`).once('value');
   const storedTokens = storedTokensSnap.val() || {};
-  Object.entries(storedTokens).forEach(([key, value]) => {
-    const token = typeof value === 'string' ? value : value?.token;
-    addToken(token, `userTokens/${userId}/${key}`);
-  });
+  const entries = Object.entries(storedTokens);
+  if (entries.length > 0) {
+    entries.sort((a, b) => {
+      const timeA = new Date(a[1]?.updatedAt || 0).getTime();
+      const timeB = new Date(b[1]?.updatedAt || 0).getTime();
+      return timeB - timeA;
+    });
+    const [latestKey, latestVal] = entries[0];
+    const token = typeof latestVal === 'string' ? latestVal : latestVal?.token;
+    if (token) {
+      addToken(token, `userTokens/${userId}/${latestKey}`);
+      return { tokens, tokenPaths };
+    }
+  }
 
-  const sessionSnap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
-  addToken(sessionSnap.val(), `activeSessions/${userId}/fcmToken`);
+  // 3. Fallback: Lookup by username / email / name if userId was passed as alias
+  const usersSnap = await db.ref('users').once('value');
+  const usersVal = usersSnap.val();
+  if (usersVal) {
+    const users = Array.isArray(usersVal) ? usersVal : Object.values(usersVal);
+    const matchedUser = users.find((u) =>
+      u && (
+        u.id === userId ||
+        u.username?.toLowerCase() === userId.toLowerCase() ||
+        u.email?.toLowerCase() === userId.toLowerCase() ||
+        u.name?.toLowerCase() === userId.toLowerCase()
+      )
+    );
+    if (matchedUser && matchedUser.id && matchedUser.id !== userId) {
+      return collectTokensForUser(matchedUser.id);
+    }
+  }
+
   return { tokens, tokenPaths };
 }
 
@@ -125,7 +162,11 @@ async function collectTokensForRole(role, senderId) {
   const tokenPaths = new Map();
   const tokens = [];
   tokenResults.forEach((result) => {
-    result.tokens.forEach((token) => tokens.push(token));
+    result.tokens.forEach((token) => {
+      if (!tokens.includes(token)) {
+        tokens.push(token);
+      }
+    });
     result.tokenPaths.forEach((paths, token) => tokenPaths.set(token, paths));
   });
   return { tokens, tokenPaths };

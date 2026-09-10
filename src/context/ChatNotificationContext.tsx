@@ -432,8 +432,27 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         // browser. Cross-check against the user actually logged into THIS tab
         // before surfacing anything, and never show the sender their own message.
         const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
-        const isForThisUser = targetUserId ? currentUser?.id === targetUserId : myRole === role;
-        const isFromThisUser = !!senderId && !!currentUser?.id && senderId === currentUser.id;
+        const currentUserIdLower = (currentUser?.id || '').toLowerCase();
+        const currentUsernameLower = (currentUser?.username || '').toLowerCase();
+        const currentEmailLower = (currentUser?.email || '').toLowerCase();
+        const targetLower = (targetUserId || '').toLowerCase();
+
+        const isForThisUser = targetUserId
+          ? (
+              currentUserIdLower === targetLower ||
+              currentUsernameLower === targetLower ||
+              currentEmailLower === targetLower ||
+              (targetLower.startsWith('customer-') && (targetLower.includes(currentUserIdLower) || targetLower.includes(currentUsernameLower))) ||
+              myRole === role
+            )
+          : myRole === role;
+
+        const senderLower = (senderId || '').toLowerCase();
+        const isFromThisUser = !!senderId && !!currentUser?.id && (
+          senderLower === currentUserIdLower ||
+          senderLower === currentUsernameLower ||
+          senderLower === currentEmailLower
+        );
 
         console.log('[ChatPush][foreground]', {
           senderId,
@@ -651,9 +670,6 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
               const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
               return prevStr === newStr ? prev : parsedThreads;
             });
-          } else {
-            set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => {});
-            setThreads(INITIAL_THREADS);
           }
 
           setNotifications((prev) => {
@@ -665,9 +681,15 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           if (typeof value.notifCounter === 'number') {
             setNotifCounter((prev) => (prev === value.notifCounter ? prev : value.notifCounter!));
           }
-        } else {
-          set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => {});
-          setThreads(INITIAL_THREADS);
+
+          // Mark incoming snapshot as serialized so useEffect does not echo-write back
+          lastSerializedStateRef.current = JSON.stringify(sanitizeForFirebase({
+            threads: parsedThreads,
+            orders,
+            users,
+            notifications: parsedNotifs,
+            notifCounter: typeof value.notifCounter === 'number' ? value.notifCounter : notifCounter,
+          }));
         }
       }, (err) => console.warn('Firebase RTDB chatState sync:', err.message));
       unsubs.push(unsubChat);
@@ -1291,9 +1313,18 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const notifTitle = 'New message from Support';
       const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
 
+      // Find user in users collection to resolve canonical user ID for push and notification routing
+      const matchedUser = users.find(
+        (u) =>
+          (thread.customerId && (u.id === thread.customerId || u.username?.toLowerCase() === thread.customerId.toLowerCase())) ||
+          (thread.customerName && (u.name?.toLowerCase() === thread.customerName.toLowerCase() || u.username?.toLowerCase() === thread.customerName.toLowerCase()))
+      );
+
+      const effectiveTargetUserId = matchedUser?.id || thread.customerId || (thread.id.startsWith('customer-') ? thread.id.replace('customer-', '') : '');
+
       addNotification({
         role: recipientRole,
-        userId: thread.customerId,
+        userId: effectiveTargetUserId || thread.customerId,
         title: notifTitle,
         body: notifBody,
         time: 'Just now',
@@ -1304,10 +1335,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       // +1 accounts for the notification just queued above.
       const badgeCount =
-        notifications.filter((n) => n.role === recipientRole && n.userId === thread.customerId && !n.read).length + 1;
+        notifications.filter((n) => n.role === recipientRole && (n.userId === effectiveTargetUserId || n.userId === thread.customerId) && !n.read).length + 1;
       sendChatPushNotification({
-        senderId: currentUser?.id || 'unknown-sender',
-        targetUserId: thread.customerId,
+        senderId: currentUser?.id || 'admin',
+        targetUserId: effectiveTargetUserId || undefined,
         targetRole: recipientRole,
         title: notifTitle,
         body: notifBody,
