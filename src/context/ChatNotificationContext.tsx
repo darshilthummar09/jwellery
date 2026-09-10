@@ -397,6 +397,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const channelRef = useRef<BroadcastChannel | null>(null);
   const knownMessageIdsRef = useRef<Set<number>>(new Set());
   const isInitialSyncRef = useRef<boolean>(true);
+  // Always-fresh ref so Firebase onValue closures never read stale currentUser
+  const currentUserRef = useRef(currentUser);
 
   // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
   useEffect(() => {
@@ -438,6 +440,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       }
     } catch {}
   }, [notifications, threads, currentUser?.role, currentUser?.id]);
+
+  // Keep currentUserRef in sync every render so Firebase closures read fresh data
+  currentUserRef.current = currentUser;
 
   // ─── Automatic FCM Token Session Sync (Once Per User Session) ───────────────
   const hasSyncedFcmTokenRef = useRef<string | null>(null);
@@ -717,22 +722,33 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
             );
 
             if (!isInitialSyncRef.current) {
-              const currentRole = currentUser?.role === 'super-admin' ? 'admin' : (currentUser?.role || 'admin');
-              const brandNew = allIncomingMsgs.filter(
-                (m) =>
-                  !knownMessageIdsRef.current.has(m.id) &&
-                  m.from !== currentRole
-              );
+              // Always read from ref so closure never uses a stale currentUser
+              const liveUser = currentUserRef.current;
+              const currentRole = liveUser?.role === 'super-admin' ? 'admin' : (liveUser?.role || 'admin');
+              const currentUserId = (liveUser?.id || '').toLowerCase();
+              const currentUsername = (liveUser?.username || '').toLowerCase();
+
+              const brandNew = allIncomingMsgs.filter((m) => {
+                if (knownMessageIdsRef.current.has(m.id)) return false;
+                // Never show a notification for the user's own messages
+                if (m.from === currentRole) return false;
+                // Extra check: filter by senderId field when available
+                const senderIdLower = (m as any).senderId
+                  ? String((m as any).senderId).toLowerCase()
+                  : '';
+                if (senderIdLower && (senderIdLower === currentUserId || senderIdLower === currentUsername)) return false;
+                return true;
+              });
 
               if (brandNew.length > 0) {
                 const relevant = brandNew.filter((m) => {
                   if (currentRole === 'admin') return true;
                   if (currentRole === 'customer') {
                     return (
-                      isMatchingUserId(m.thread.customerId, currentUser, users) ||
-                      m.thread.customerName?.toLowerCase() === currentUser?.name?.toLowerCase() ||
-                      m.thread.id.includes(currentUser?.id || '') ||
-                      m.thread.id.includes(currentUser?.username || '')
+                      isMatchingUserId(m.thread.customerId, liveUser, users) ||
+                      m.thread.customerName?.toLowerCase() === liveUser?.name?.toLowerCase() ||
+                      m.thread.id.includes(liveUser?.id || '') ||
+                      m.thread.id.includes(liveUser?.username || '')
                     );
                   }
                   return false;
@@ -1291,6 +1307,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         seenBy: [],
       };
 
+      // Pre-register ID so Firebase echo won't re-trigger a notification for the sender
+      knownMessageIdsRef.current.add(msg.id);
+
       const targetThreadId = optionalThreadId || `customer-${customerId}`;
 
       let nextThreads: ChatThread[] = [];
@@ -1387,6 +1406,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       seenBy: [],
     };
 
+    // Pre-register ID so Firebase echo won't re-trigger a notification for the sender
+    knownMessageIdsRef.current.add(msg.id);
+
     let nextThreads: ChatThread[] = [];
     setThreads((prev) => {
       nextThreads = prev.map((t) =>
@@ -1440,6 +1462,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       attachments: attachments.length > 0 ? attachments : undefined,
       seenBy: [],
     };
+
+    // Pre-register this message ID so the Firebase echo doesn't trigger a
+    // duplicate notification sound/banner for the sender's own message.
+    knownMessageIdsRef.current.add(msg.id);
 
     let nextThreads: ChatThread[] = [];
     setThreads((prev) => {

@@ -91,19 +91,19 @@ async function collectTokensForUser(userId) {
   const tokens = [];
   const addToken = (token, path) => {
     if (!token || typeof token !== 'string') return;
+    // Deduplicate: never add the same token string twice
+    if (tokens.includes(token)) {
+      if (!tokenPaths.has(token)) tokenPaths.set(token, []);
+      tokenPaths.get(token).push(path);
+      return;
+    }
     tokens.push(token);
     if (!tokenPaths.has(token)) tokenPaths.set(token, []);
     tokenPaths.get(token).push(path);
   };
 
-  // 1. Check active session token first (single-device enforcement)
-  const sessionSnap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
-  const activeSessionToken = sessionSnap.val();
-  if (activeSessionToken && typeof activeSessionToken === 'string') {
-    addToken(activeSessionToken, `activeSessions/${userId}/fcmToken`);
-  }
-
-  // 2. Also check canonical user alias if userId was passed as username or email
+  // 1. Resolve canonical user ID from users collection
+  //    (userId might be passed as username, email, or display name)
   let canonicalUserId = userId;
   const usersSnap = await db.ref('users').once('value');
   const usersVal = usersSnap.val();
@@ -119,33 +119,40 @@ async function collectTokensForUser(userId) {
     );
     if (matchedUser && matchedUser.id) {
       canonicalUserId = matchedUser.id;
-      if (tokens.length === 0) {
-        const canonicalSessionSnap = await db.ref(`activeSessions/${canonicalUserId}/fcmToken`).once('value');
-        const canonicalActiveToken = canonicalSessionSnap.val();
-        if (canonicalActiveToken && typeof canonicalActiveToken === 'string') {
-          addToken(canonicalActiveToken, `activeSessions/${canonicalUserId}/fcmToken`);
-        }
-      }
     }
   }
 
-  // 3. Fallback to userTokens only if no active session token exists, taking the most recent one
-  if (tokens.length === 0) {
-    const targetIds = [userId, canonicalUserId].filter((v, i, a) => v && a.indexOf(v) === i);
-    for (const id of targetIds) {
-      const storedTokensSnap = await db.ref(`userTokens/${id}`).once('value');
-      const storedTokens = storedTokensSnap.val() || {};
-      const entries = Object.entries(storedTokens).map(([k, v]) => ({
-        key: k,
-        token: typeof v === 'string' ? v : v?.token,
-        updatedAt: v?.updatedAt || ''
-      })).filter(e => e.token);
+  // 2. Always prefer the active session token — it represents the device
+  //    the user is currently logged in on (single-device enforcement).
+  //    Check both the raw userId and the resolved canonicalUserId.
+  const idsToCheck = [...new Set([userId, canonicalUserId].filter(Boolean))];
+  for (const id of idsToCheck) {
+    const sessionSnap = await db.ref(`activeSessions/${id}/fcmToken`).once('value');
+    const activeToken = sessionSnap.val();
+    if (activeToken && typeof activeToken === 'string') {
+      addToken(activeToken, `activeSessions/${id}/fcmToken`);
+      // Found an active session token — stop here. We send to exactly ONE
+      // device (the user's current active session) to prevent duplicates.
+      return { tokens, tokenPaths };
+    }
+  }
 
-      entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-      if (entries.length > 0) {
-        addToken(entries[0].token, `userTokens/${id}/${entries[0].key}`);
-        break;
-      }
+  // 3. Fallback to stored userTokens ONLY if there is no active session token.
+  //    Take the single most-recently-updated token to avoid spamming old devices.
+  for (const id of idsToCheck) {
+    const storedTokensSnap = await db.ref(`userTokens/${id}`).once('value');
+    const storedTokens = storedTokensSnap.val() || {};
+    const entries = Object.entries(storedTokens).map(([k, v]) => ({
+      key: k,
+      token: typeof v === 'string' ? v : v?.token,
+      updatedAt: v?.updatedAt || ''
+    })).filter(e => e.token);
+
+    entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    if (entries.length > 0) {
+      addToken(entries[0].token, `userTokens/${id}/${entries[0].key}`);
+      // One token per user — stop after first match to avoid duplicates.
+      return { tokens, tokenPaths };
     }
   }
 
@@ -238,7 +245,9 @@ exports.sendChatPush = onCall(async (request) => {
         icon: '/pwa-192x192-v4.png',
         badge: '/pwa-192x192-v4.png',
         tag: threadId ? `chat-${threadId}` : 'dream-jewels-chat',
-        renotify: true,
+        // renotify: false — same-tag notification replaces the previous banner
+        // instead of stacking a new one, preventing duplicate lock-screen alerts.
+        renotify: false,
         data: {
           url: targetUrl,
         },
