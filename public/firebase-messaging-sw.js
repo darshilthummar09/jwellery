@@ -57,9 +57,13 @@ if (messaging) {
       }
     };
 
-    const actions = [
-      self.registration.showNotification(notificationTitle, notificationOptions)
-    ];
+    const hasAutoNotification = Boolean(payload.notification && (payload.notification.title || payload.notification.body));
+    const actions = [];
+
+    // Only display manually if FCM did not already render the notification banner automatically
+    if (!hasAutoNotification) {
+      actions.push(self.registration.showNotification(notificationTitle, notificationOptions));
+    }
 
     // Set or update the app icon badge count on the device Home Screen
     if (!isNaN(badgeCount) && 'setAppBadge' in navigator) {

@@ -244,7 +244,6 @@ export const registerForegroundPushListener = (
       const messaging = getMessaging(app);
       unsubscribe = onMessage(messaging, (payload) => {
         console.log('[NotificationService] Foreground message received:', payload);
-        playNotificationSound();
         onMessageReceived(payload);
       });
     }

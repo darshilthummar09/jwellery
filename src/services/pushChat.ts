@@ -25,7 +25,25 @@ export interface ChatPushPayload {
   badgeCount?: number;
 }
 
+function isLocalEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '[::1]' ||
+    host.endsWith('.local') ||
+    Boolean(import.meta.env?.DEV && !import.meta.env?.VITE_ENABLE_LOCAL_PUSH)
+  );
+}
+
 export async function sendChatPushNotification(payload: ChatPushPayload): Promise<void> {
+  // Do not send remote push notifications when running in local environment
+  if (isLocalEnvironment()) {
+    console.log('[pushChat] Local environment detected — push notification skipped:', payload.title);
+    return;
+  }
+
   if (!firebaseFunctions) return;
   try {
     const callable = httpsCallable(firebaseFunctions, 'sendChatPush');

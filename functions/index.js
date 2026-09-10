@@ -96,18 +96,15 @@ async function collectTokensForUser(userId) {
     tokenPaths.get(token).push(path);
   };
 
-  // 1. Direct lookup by userId
-  const storedTokensSnap = await db.ref(`userTokens/${userId}`).once('value');
-  const storedTokens = storedTokensSnap.val() || {};
-  Object.entries(storedTokens).forEach(([key, value]) => {
-    const token = typeof value === 'string' ? value : value?.token;
-    addToken(token, `userTokens/${userId}/${key}`);
-  });
-
+  // 1. Check active session token first (single-device enforcement)
   const sessionSnap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
-  addToken(sessionSnap.val(), `activeSessions/${userId}/fcmToken`);
+  const activeSessionToken = sessionSnap.val();
+  if (activeSessionToken && typeof activeSessionToken === 'string') {
+    addToken(activeSessionToken, `activeSessions/${userId}/fcmToken`);
+  }
 
-  // 2. Also resolve user aliases from users list (in case userId was passed as username or email or name)
+  // 2. Also check canonical user alias if userId was passed as username or email
+  let canonicalUserId = userId;
   const usersSnap = await db.ref('users').once('value');
   const usersVal = usersSnap.val();
   if (usersVal) {
@@ -120,15 +117,35 @@ async function collectTokensForUser(userId) {
         u.name?.toLowerCase() === userId.toLowerCase()
       )
     );
-    if (matchedUser && matchedUser.id && matchedUser.id !== userId) {
-      const canonicalTokensSnap = await db.ref(`userTokens/${matchedUser.id}`).once('value');
-      const canonicalTokens = canonicalTokensSnap.val() || {};
-      Object.entries(canonicalTokens).forEach(([key, value]) => {
-        const token = typeof value === 'string' ? value : value?.token;
-        addToken(token, `userTokens/${matchedUser.id}/${key}`);
-      });
-      const canonicalSessionSnap = await db.ref(`activeSessions/${matchedUser.id}/fcmToken`).once('value');
-      addToken(canonicalSessionSnap.val(), `activeSessions/${matchedUser.id}/fcmToken`);
+    if (matchedUser && matchedUser.id) {
+      canonicalUserId = matchedUser.id;
+      if (tokens.length === 0) {
+        const canonicalSessionSnap = await db.ref(`activeSessions/${canonicalUserId}/fcmToken`).once('value');
+        const canonicalActiveToken = canonicalSessionSnap.val();
+        if (canonicalActiveToken && typeof canonicalActiveToken === 'string') {
+          addToken(canonicalActiveToken, `activeSessions/${canonicalUserId}/fcmToken`);
+        }
+      }
+    }
+  }
+
+  // 3. Fallback to userTokens only if no active session token exists, taking the most recent one
+  if (tokens.length === 0) {
+    const targetIds = [userId, canonicalUserId].filter((v, i, a) => v && a.indexOf(v) === i);
+    for (const id of targetIds) {
+      const storedTokensSnap = await db.ref(`userTokens/${id}`).once('value');
+      const storedTokens = storedTokensSnap.val() || {};
+      const entries = Object.entries(storedTokens).map(([k, v]) => ({
+        key: k,
+        token: typeof v === 'string' ? v : v?.token,
+        updatedAt: v?.updatedAt || ''
+      })).filter(e => e.token);
+
+      entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+      if (entries.length > 0) {
+        addToken(entries[0].token, `userTokens/${id}/${entries[0].key}`);
+        break;
+      }
     }
   }
 

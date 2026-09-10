@@ -19,7 +19,7 @@ import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { useAuth } from '../../hooks/useAuth';
 import { Avatar } from '../../components/common/Avatar';
-import { useChatNotification } from '../../context/ChatNotificationContext';
+import { useChatNotification, isMatchingUserId } from '../../context/ChatNotificationContext';
 import type { ChatAttachment, ChatThread } from '../../context/ChatNotificationContext';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 
@@ -94,7 +94,7 @@ export function GeneralChatPage() {
   const requestedOrderId = searchParams.get('orderId');
   const requestedThreadId = searchParams.get('thread');
 
-  const { threads, sendCustomerMessage, markThreadRead, deleteMessage } = useChatNotification();
+  const { threads, users, sendCustomerMessage, markThreadRead, deleteMessage } = useChatNotification();
   const [input, setInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
@@ -112,39 +112,48 @@ export function GeneralChatPage() {
         t.participantRole !== 'designer' &&
         (
           t.customerId === customerId ||
+          (user?.id && t.customerId === user.id) ||
+          (user?.username && t.customerId === user.username) ||
+          isMatchingUserId(t.customerId, user, users) ||
           t.customerName.toLowerCase() === customerName.toLowerCase() ||
           t.id === `customer-${customerId}` ||
+          t.id === `customer-${user?.id}` ||
+          t.id === `customer-${user?.username}` ||
           t.id === requestedThreadId
         )
     );
 
-    // If no general thread exists in the list, create a virtual placeholder representation
-    const hasGeneral = my.some((t) => t.id === `customer-${customerId}`);
-    if (!hasGeneral && my.length === 0) {
-      return [
-        {
-          id: `customer-${customerId}`,
-          customerName,
-          customerId,
-          participantRole: 'customer' as const,
-          messages: [
-            {
-              id: 1,
-              from: 'admin' as const,
-              senderName: 'Dream Jewels Support',
-              text: `👋 Welcome to Dream Jewels, ${customerName}! How can our master jewelers assist you today?`,
-              time: 'Just now',
-            },
-          ],
-          unread: 0,
-          customerUnread: 0,
-          lastMessage: 'Welcome to Dream Jewels support!',
-          lastTime: 'Just now',
-        },
-      ];
+    const generalId = `customer-${user?.id || customerId}`;
+    const generalThread = my.find((t) => t.id === generalId || t.id === `customer-${customerId}` || (!t.orderId && !t.orderName));
+
+    if (generalThread) {
+      const orderThreads = my.filter((t) => t.id !== generalThread.id);
+      return [generalThread, ...orderThreads];
     }
-    return my;
-  }, [threads, customerId, customerName]);
+
+    // Always provide General Support Chat at the top even when order chats exist
+    const defaultGeneralThread: ChatThread = {
+      id: generalId,
+      customerName,
+      customerId: user?.id || customerId,
+      participantRole: 'customer' as const,
+      messages: [
+        {
+          id: 1,
+          from: 'admin' as const,
+          senderName: 'Dream Jewels Support',
+          text: `👋 Welcome to Dream Jewels, ${customerName}! How can our master jewelers assist you today?`,
+          time: 'Just now',
+        },
+      ],
+      unread: 0,
+      customerUnread: 0,
+      lastMessage: 'Welcome to Dream Jewels support!',
+      lastTime: 'Just now',
+    };
+
+    return [defaultGeneralThread, ...my];
+  }, [threads, customerId, customerName, user, users, requestedThreadId]);
 
   // 2. Select initial or requested thread
   const [selectedThreadId, setSelectedThreadId] = useState<string>(() => {
@@ -153,7 +162,7 @@ export function GeneralChatPage() {
       const match = customerThreads.find((t) => t.orderId === requestedOrderId || t.id === `order-${requestedOrderId}`);
       if (match) return match.id;
     }
-    return customerThreads[0]?.id || `customer-${customerId}`;
+    return customerThreads[0]?.id || `customer-${user?.id || customerId}`;
   });
 
   // Keep selectedThreadId in sync when requested via URL or when customerThreads load
@@ -217,8 +226,8 @@ export function GeneralChatPage() {
 
   const sendMessage = () => {
     if (!input.trim() && pendingAttachments.length === 0) return;
-    const targetThreadId = activeThread?.id || `customer-${customerId}`;
-    sendCustomerMessage(customerId, customerName, input.trim(), targetThreadId, pendingAttachments);
+    const targetThreadId = activeThread?.id || `customer-${user?.id || customerId}`;
+    sendCustomerMessage(user?.id || customerId, customerName, input.trim(), targetThreadId, pendingAttachments);
     setInput('');
     setPendingAttachments([]);
   };

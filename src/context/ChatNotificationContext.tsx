@@ -8,6 +8,7 @@ import {
   getPushPermissionState,
   registerForegroundPushListener,
   showLocalNotification,
+  playNotificationSound,
 } from '../services/notificationService';
 import { sendChatPushNotification } from '../services/pushChat';
 import { useAuth } from '../hooks/useAuth';
@@ -196,6 +197,57 @@ interface StoredChatState {
   notifCounter?: number;
 }
 
+/**
+ * Normalizes user identification across id (usr_customer_001), username (customer1), email, and display names.
+ * Ensures notifications are never dropped due to id vs username differences.
+ */
+export function isMatchingUserId(
+  notifUserId: string | undefined | null,
+  user: User | null | undefined,
+  usersList?: User[]
+): boolean {
+  if (!notifUserId || !user) return false;
+
+  const target = String(notifUserId).toLowerCase().trim();
+  const userId = String(user.id || '').toLowerCase().trim();
+  const username = String(user.username || '').toLowerCase().trim();
+  const email = String(user.email || '').toLowerCase().trim();
+  const name = String(user.name || '').toLowerCase().trim();
+
+  if (target === userId || target === username || target === email || target === name) {
+    return true;
+  }
+
+  if (target.startsWith('customer-')) {
+    const stripped = target.replace('customer-', '');
+    if (stripped === userId || stripped === username || stripped === email || stripped === name) {
+      return true;
+    }
+  }
+
+  const listToSearch = usersList && usersList.length > 0 ? usersList : MOCK_USERS;
+  const matched = listToSearch.find(
+    (u) =>
+      u &&
+      (String(u.id || '').toLowerCase() === target ||
+        String(u.username || '').toLowerCase() === target ||
+        String(u.email || '').toLowerCase() === target ||
+        String(u.name || '').toLowerCase() === target)
+  );
+
+  if (matched) {
+    const mId = String(matched.id || '').toLowerCase();
+    const mUser = String(matched.username || '').toLowerCase();
+    const mEmail = String(matched.email || '').toLowerCase();
+    const mName = String(matched.name || '').toLowerCase();
+    if (mId === userId || mUser === username || mEmail === email || mName === name) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** Parses an orders collection from Firebase or LocalStorage whether it's an Array or Object map */
 function parseOrdersFromState(raw: any): Order[] {
   if (!raw) return [];
@@ -343,6 +395,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const lastSerializedStateRef = useRef('');
   const isFirstSyncRunRef = useRef(true);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const knownMessageIdsRef = useRef<Set<number>>(new Set());
+  const isInitialSyncRef = useRef<boolean>(true);
 
   // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
   useEffect(() => {
@@ -352,8 +406,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     const unreadNotifications = notifications.filter((n) => {
       if (n.read) return false;
       if (n.role !== currentRole) return false;
-      if (currentRole === 'customer' && currentCustId && n.userId && n.userId !== currentCustId) return false;
-      if (currentRole === 'designer' && currentCustId && n.userId && n.userId !== currentCustId) return false;
+      if (currentRole === 'customer' && currentCustId && !isMatchingUserId(n.userId, currentUser, users)) return false;
+      if (currentRole === 'designer' && currentCustId && !isMatchingUserId(n.userId, currentUser, users)) return false;
       return true;
     }).length;
 
@@ -362,7 +416,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       unreadMessages = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
     } else if (currentRole === 'customer') {
       unreadMessages = threads
-        .filter((t) => !currentCustId || t.customerId === currentCustId || t.id === `customer-${currentCustId}` || t.id === `order-${currentCustId}`)
+        .filter((t) => !currentCustId || isMatchingUserId(t.customerId, currentUser, users) || t.id.includes(currentCustId))
         .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
     } else if (currentRole === 'designer') {
       unreadMessages = threads
@@ -511,7 +565,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
       const relevant = items.find((item) => {
         if (item.role !== myRole) return false;
-        if (item.userId && currentUser?.id && item.userId !== currentUser.id) return false;
+        if (item.userId && currentUser && !isMatchingUserId(item.userId, currentUser, users)) return false;
         return true;
       });
       if (relevant) {
@@ -658,6 +712,50 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           const parsedNotifs = parseNotificationsFromState(value.notifications);
           
           if (parsedThreads.length > 0) {
+            const allIncomingMsgs = parsedThreads.flatMap((t) =>
+              (t.messages || []).map((m) => ({ ...m, threadId: t.id, thread: t }))
+            );
+
+            if (!isInitialSyncRef.current) {
+              const currentRole = currentUser?.role === 'super-admin' ? 'admin' : (currentUser?.role || 'admin');
+              const brandNew = allIncomingMsgs.filter(
+                (m) =>
+                  !knownMessageIdsRef.current.has(m.id) &&
+                  m.from !== currentRole
+              );
+
+              if (brandNew.length > 0) {
+                const relevant = brandNew.filter((m) => {
+                  if (currentRole === 'admin') return true;
+                  if (currentRole === 'customer') {
+                    return (
+                      isMatchingUserId(m.thread.customerId, currentUser, users) ||
+                      m.thread.customerName?.toLowerCase() === currentUser?.name?.toLowerCase() ||
+                      m.thread.id.includes(currentUser?.id || '') ||
+                      m.thread.id.includes(currentUser?.username || '')
+                    );
+                  }
+                  return false;
+                });
+
+                if (relevant.length > 0) {
+                  const latest = relevant[relevant.length - 1];
+                  playNotificationSound();
+                  if (typeof document !== 'undefined' && document.hidden) {
+                    showLocalNotification(latest.senderName || 'Dream Jewels Support', {
+                      body: latest.text ? (latest.text.length > 80 ? latest.text.slice(0, 80) + '…' : latest.text) : 'New message received',
+                      silent: true,
+                      tag: `chat-${latest.threadId}`,
+                    });
+                  }
+                }
+              }
+            } else {
+              isInitialSyncRef.current = false;
+            }
+
+            allIncomingMsgs.forEach((m) => knownMessageIdsRef.current.add(m.id));
+
             setThreads((prev) => {
               const prevStr = JSON.stringify(sanitizeForFirebase(prev));
               const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
@@ -1442,8 +1540,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setNotifications((prev) =>
       prev.map((n) => {
         if (n.role !== role) return n;
-        if (role === 'customer' && userId && n.userId && n.userId !== userId) return n;
-        if (role === 'designer' && userId && n.userId && n.userId !== userId) return n;
+        if (role === 'customer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return n;
+        if (role === 'designer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return n;
         return { ...n, read: true };
       })
     );
@@ -1452,7 +1550,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         if (role === 'admin') {
           return { ...thread, unread: 0 };
         }
-        if (role === 'customer' && (!userId || thread.customerId === userId || thread.id === `customer-${userId}`)) {
+        if (role === 'customer' && (!userId || isMatchingUserId(thread.customerId, currentUser, users) || thread.id.includes(userId))) {
           return { ...thread, customerUnread: 0 };
         }
         if (role === 'designer' && (!userId || thread.customerName === userId || thread.id.includes(userId))) {
@@ -1461,7 +1559,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         return thread;
       })
     );
-  }, []);
+  }, [currentUser, users]);
 
   const markNotificationRead = useCallback((id: number) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
@@ -1475,23 +1573,23 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setNotifications((prev) =>
       prev.filter((n) => {
         if (n.role !== role) return true;
-        if (role === 'customer' && userId && n.userId && n.userId !== userId) return true;
-        if (role === 'designer' && userId && n.userId && n.userId !== userId) return true;
+        if (role === 'customer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return true;
+        if (role === 'designer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return true;
         return false;
       })
     );
-  }, []);
+  }, [currentUser, users]);
 
   const getUnreadCount = useCallback(
     (role: 'customer' | 'admin' | 'designer', userId?: string) =>
       notifications.filter((n) => {
         if (n.read) return false;
         if (n.role !== role) return false;
-        if (role === 'customer' && userId && n.userId && n.userId !== userId) return false;
-        if (role === 'designer' && userId && n.userId && n.userId !== userId) return false;
+        if (role === 'customer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return false;
+        if (role === 'designer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return false;
         return true;
       }).length,
-    [notifications]
+    [notifications, currentUser, users]
   );
 
   const getChatUnreadCount = useCallback(
@@ -1503,7 +1601,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       return threads
         .filter((thread) => {
           if (role === 'customer') {
-            if (userId) return thread.customerId === userId || thread.id === `customer-${userId}` || thread.id === `order-${userId}`;
+            if (userId) {
+              return (
+                isMatchingUserId(thread.customerId, currentUser, users) ||
+                thread.id.includes(userId) ||
+                thread.customerName?.toLowerCase() === currentUser?.name?.toLowerCase()
+              );
+            }
             return thread.participantRole === 'customer';
           }
           if (role === 'designer') {
@@ -1514,7 +1618,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         })
         .reduce((sum, thread) => sum + (thread.customerUnread || 0), 0);
     },
-    [threads]
+    [threads, currentUser, users]
   );
 
   const triggerTestNotification = useCallback(

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
 import { useAuth } from '../../hooks/useAuth';
-import { useChatNotification, AppNotification } from '../../context/ChatNotificationContext';
+import { useChatNotification, AppNotification, isMatchingUserId } from '../../context/ChatNotificationContext';
 
 interface NotificationsViewProps {
   notifications: AppNotification[];
@@ -53,12 +53,12 @@ function NotificationsView({
 
 export function CustomerNotificationsPage() {
   const { user } = useAuth();
-  const { notifications, markAllNotificationsRead, markNotificationRead } = useChatNotification();
+  const { notifications, users, markAllNotificationsRead, markNotificationRead } = useChatNotification();
   const navigate = useNavigate();
 
   const myNotifications = notifications.filter((n) => {
     if (n.role !== 'customer') return false;
-    if (user?.id && n.userId && n.userId !== user.id) return false;
+    if (user?.id && n.userId && !isMatchingUserId(n.userId, user, users)) return false;
     return true;
   });
 

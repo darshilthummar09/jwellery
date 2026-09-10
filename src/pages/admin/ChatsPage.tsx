@@ -334,9 +334,18 @@ export function ChatsPage() {
                       {/* Info & Last Message */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1 mb-1">
-                          <h4 className="text-xs font-bold text-slate-900 truncate font-mono">
-                            {thread.orderId ? `#${thread.orderId}` : (thread.orderName || thread.customerName)}
-                          </h4>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                              thread.orderId || thread.id.startsWith('order-')
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-sky-100 text-sky-800 border border-sky-200'
+                            }`}>
+                              {thread.orderId || thread.id.startsWith('order-') ? 'Order' : 'Support'}
+                            </span>
+                            <h4 className="text-xs font-bold text-slate-900 truncate font-mono">
+                              {thread.orderId ? `#${thread.orderId}` : (thread.customerName || 'General Support')}
+                            </h4>
+                          </div>
                           <span className="text-[10px] text-slate-400 flex-shrink-0 font-medium">{thread.lastTime}</span>
                         </div>
 
