@@ -24,7 +24,7 @@ try {
   console.warn('Firebase messaging in service worker initialization error:', e);
 }
 
-// 1. Listen for background push events from FCM when app is completely closed
+// 1. Listen for background push events from FCM when app is in background or closed
 if (messaging) {
   messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message:', payload);
@@ -33,13 +33,14 @@ if (messaging) {
     const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new update.';
     const badgeCount = parseInt(payload.data?.badgeCount || payload.data?.unreadCount, 10);
     const targetUrl = payload.data?.url || '/';
+    const tag = payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification');
 
     const notificationOptions = {
       body: notificationBody,
       icon: '/pwa-192x192-v4.png',
       badge: '/pwa-192x192-v4.png',
       vibrate: [200, 100, 200],
-      tag: payload.data?.tag || 'dream-jewels-notification',
+      tag: tag,
       renotify: true,
       data: {
         url: targetUrl,
@@ -59,38 +60,6 @@ if (messaging) {
     return Promise.all(actions);
   });
 }
-
-// 2. Generic Push event fallback (for standard Web Push payloads)
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  try {
-    const data = event.data.json();
-    const notificationTitle = data.title || data.notification?.title || 'Dream Jewels';
-    const notificationOptions = {
-      body: data.body || data.notification?.body || 'New notification',
-      icon: '/pwa-192x192-v4.png',
-      badge: '/pwa-192x192-v4.png',
-      vibrate: [200, 100, 200],
-      data: {
-        url: data.url || data.data?.url || '/'
-      }
-    };
-
-    const count = parseInt(data.badgeCount || data.data?.badgeCount, 10);
-
-    event.waitUntil(
-      Promise.all([
-        self.registration.showNotification(notificationTitle, notificationOptions),
-        !isNaN(count) && 'setAppBadge' in navigator 
-          ? navigator.setAppBadge(count).catch(() => {}) 
-          : Promise.resolve()
-      ])
-    );
-  } catch (err) {
-    console.warn('Push event payload parse fallback:', err);
-  }
-});
 
 // 3. User taps on the push notification banner
 self.addEventListener('notificationclick', (event) => {

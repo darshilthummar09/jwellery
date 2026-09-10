@@ -90,12 +90,13 @@ async function collectTokensForUser(userId) {
   const tokenPaths = new Map();
   const tokens = [];
   const addToken = (token, path) => {
-    if (!token) return;
+    if (!token || typeof token !== 'string') return;
     tokens.push(token);
     if (!tokenPaths.has(token)) tokenPaths.set(token, []);
     tokenPaths.get(token).push(path);
   };
 
+  // 1. Direct lookup by userId
   const storedTokensSnap = await db.ref(`userTokens/${userId}`).once('value');
   const storedTokens = storedTokensSnap.val() || {};
   Object.entries(storedTokens).forEach(([key, value]) => {
@@ -105,6 +106,32 @@ async function collectTokensForUser(userId) {
 
   const sessionSnap = await db.ref(`activeSessions/${userId}/fcmToken`).once('value');
   addToken(sessionSnap.val(), `activeSessions/${userId}/fcmToken`);
+
+  // 2. Also resolve user aliases from users list (in case userId was passed as username or email or name)
+  const usersSnap = await db.ref('users').once('value');
+  const usersVal = usersSnap.val();
+  if (usersVal) {
+    const users = Array.isArray(usersVal) ? usersVal : Object.values(usersVal);
+    const matchedUser = users.find((u) =>
+      u && (
+        u.id === userId ||
+        u.username?.toLowerCase() === userId.toLowerCase() ||
+        u.email?.toLowerCase() === userId.toLowerCase() ||
+        u.name?.toLowerCase() === userId.toLowerCase()
+      )
+    );
+    if (matchedUser && matchedUser.id && matchedUser.id !== userId) {
+      const canonicalTokensSnap = await db.ref(`userTokens/${matchedUser.id}`).once('value');
+      const canonicalTokens = canonicalTokensSnap.val() || {};
+      Object.entries(canonicalTokens).forEach(([key, value]) => {
+        const token = typeof value === 'string' ? value : value?.token;
+        addToken(token, `userTokens/${matchedUser.id}/${key}`);
+      });
+      const canonicalSessionSnap = await db.ref(`activeSessions/${matchedUser.id}/fcmToken`).once('value');
+      addToken(canonicalSessionSnap.val(), `activeSessions/${matchedUser.id}/fcmToken`);
+    }
+  }
+
   return { tokens, tokenPaths };
 }
 
