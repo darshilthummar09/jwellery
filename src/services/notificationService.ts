@@ -108,35 +108,21 @@ export const requestPushPermission = async (userId?: string): Promise<{
       return { success: false, error: 'Notification permission was denied or dismissed.' };
     }
 
-    // 2. Register Service Worker (reuse if already active)
+    // 2. Register Service Worker at root scope '/' (required for mobile background push delivery)
     let registration: ServiceWorkerRegistration | undefined;
     try {
       const existing = await navigator.serviceWorker.getRegistrations();
       for (const r of existing) {
-        if (!r.active?.scriptURL.includes('firebase-messaging-sw.js')) continue;
-        // Self-heal browsers that already have this SW registered at scope
-        // '/' from before the dedicated push scope existed — leaving that
-        // stale registration in place would keep it fighting the main PWA
-        // service worker for control of '/' and reintroduce the reload loop.
-        if (!r.scope.includes('firebase-cloud-messaging-push-scope')) {
-          await r.unregister().catch(() => {});
-          continue;
+        if (r.active?.scriptURL.includes('firebase-messaging-sw.js')) {
+          registration = r;
+          break;
         }
-        registration = r;
       }
     } catch {}
 
     if (!registration) {
-      // Scoped away from '/' on purpose: the main PWA service worker
-      // (registered via registerSW in main.tsx) also controls scope '/'.
-      // Two different scripts fighting over the same scope makes the browser
-      // repeatedly swap which one controls the page, firing 'controllerchange'
-      // each time — and since the PWA is registered with autoUpdate, every
-      // one of those swaps triggers an automatic page reload. That's what
-      // was causing refresh-on-refresh loops (worst on pull-to-refresh/hard
-      // reload, which is exactly what re-triggers this registration).
       registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-        scope: '/firebase-cloud-messaging-push-scope',
+        scope: '/',
       });
     }
     await navigator.serviceWorker.ready;

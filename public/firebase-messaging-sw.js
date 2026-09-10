@@ -24,6 +24,15 @@ try {
   console.warn('Firebase messaging in service worker initialization error:', e);
 }
 
+// Ensure service worker activates immediately on all platforms/mobile
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
 // 1. Listen for background push events from FCM when app is in background or closed
 if (messaging) {
   messaging.onBackgroundMessage((payload) => {
