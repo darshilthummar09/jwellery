@@ -43,6 +43,16 @@ async function sendToToken(token, { title, body, data }) {
       token,
       notification: { title, body },
       data,
+      webpush: {
+        headers: { Urgency: 'high' },
+        notification: {
+          title,
+          body,
+          icon: '/pwa-192x192-v4.png',
+          badge: '/pwa-192x192-v4.png',
+          tag: 'session-takeover',
+        },
+      },
     });
     return true;
   } catch (err) {
@@ -215,6 +225,25 @@ exports.sendChatPush = onCall(async (request) => {
     tokens: uniqueTokens,
     notification: { title, body },
     data,
+    webpush: {
+      headers: {
+        Urgency: 'high',
+      },
+      notification: {
+        title,
+        body,
+        icon: '/pwa-192x192-v4.png',
+        badge: '/pwa-192x192-v4.png',
+        tag: messageId ? `chat-msg-${messageId}` : (threadId ? `chat-${threadId}` : 'dream-jewels-chat'),
+        renotify: true,
+        data: {
+          url: targetUrl,
+        },
+      },
+      fcmOptions: {
+        link: targetUrl,
+      },
+    },
   });
 
   await Promise.all(response.responses.map(async (result, index) => {
