@@ -408,7 +408,7 @@ export function CustomerDashboard() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 mb-8">
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 mb-8">
         <StatCard
           title="Active Orders"
           value={activeOrders.length.toString()}
