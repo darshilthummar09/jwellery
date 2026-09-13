@@ -516,78 +516,15 @@ export function CustomerDashboard() {
                   </div>
 
                   {/* Card Content */}
-                  <div className="p-5 flex flex-col flex-1">
-                    <div className="mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-slate-900 text-base leading-tight group-hover:text-emerald-700 transition-colors">
-                          {order.name}
-                        </h3>
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono flex-shrink-0">
-                          #{order.id}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-1">
-                        {order.category} · {order.metal} ({order.karat})
-                      </p>
+                  <div className="p-4 sm:p-5 flex flex-col flex-1 justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base leading-snug group-hover:text-emerald-700 transition-colors">
+                        {order.name}
+                      </h3>
                     </div>
 
-                    {/* Specs badges */}
-                    {(order.size || order.weight || order.created) && (
-                      <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-3 text-slate-600">
-                        {order.size && (
-                          <div>
-                            <span className="font-semibold text-slate-400">Size: </span>
-                            <span className="font-medium text-slate-800">No. {order.size}</span>
-                          </div>
-                        )}
-                        {order.weight && (
-                          <div>
-                            <span className="font-semibold text-slate-400">Weight: </span>
-                            <span className="font-medium text-slate-800">{order.weight}</span>
-                          </div>
-                        )}
-                        {order.created && (
-                          <div className="col-span-2">
-                            <span className="font-semibold text-slate-400">Placed On: </span>
-                            <span className="font-medium text-slate-800">{order.created}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Notes */}
-                    {order.notes && (
-                      <p className="text-xs text-slate-500 italic bg-slate-50/80 p-2.5 rounded-xl border border-slate-100 mb-3 line-clamp-2">
-                        "{order.notes}"
-                      </p>
-                    )}
-
-                    {/* Rejection reason */}
-                    {order.status === 'Rejected' && order.rejectionReason && (
-                      <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2 mb-3 text-xs text-red-700">
-                        <span className="font-bold block text-red-600 mb-0.5">Reason:</span>
-                        {order.rejectionReason}
-                      </div>
-                    )}
-
-                    {/* Progress */}
-                    {order.progress && order.progress !== '0%' && (
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between text-[11px] font-medium text-slate-400 mb-1">
-                          <span>Crafting Progress</span>
-                          <span className="font-bold text-emerald-600">{order.progress}</span>
-                        </div>
-                        <div className="w-full bg-slate-100 rounded-full h-1.5">
-                          <div
-                            className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
-                            style={{ width: order.progress }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
                     {/* Footer Actions */}
-                    <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
                           <Calendar size={14} />
@@ -611,7 +548,7 @@ export function CustomerDashboard() {
                           title="Open live chat about this order"
                         >
                           <MessageCircle size={14} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
-                          <span>Order Chat</span>
+                          <span>Chat Now</span>
                         </button>
                       </div>
                     </div>

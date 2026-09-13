@@ -149,77 +149,14 @@ function ProductCard({ order, onDelete }: { order: Order; onDelete: (order: Orde
       </div>
 
       {/* Body */}
-      <div className="p-5 flex flex-col flex-1">
-        <div className="flex items-start justify-between mb-2 gap-2">
+      <div className="p-4 sm:p-5 flex flex-col flex-1 justify-between gap-4">
+        <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-slate-800 leading-tight text-sm">{order.name}</h3>
           <StatusBadge status={order.status} />
         </div>
 
-        <p className="text-xs text-slate-400 mb-3">
-          <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold font-mono mr-1.5">
-            #{order.id}
-          </span>
-          {order.category}
-          {order.metal ? ` · ${order.metal}` : ''}
-          {order.karat ? ` (${order.karat})` : ''}
-        </p>
-
-        {/* Technical specs */}
-        {(order.size || order.weight || order.created) && (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 mb-3 text-slate-600">
-            {order.size && (
-              <div>
-                <span className="font-semibold text-slate-500">Size: </span>No. {order.size}
-              </div>
-            )}
-            {order.weight && (
-              <div>
-                <span className="font-semibold text-slate-500">Weight: </span>
-                {order.weight}
-              </div>
-            )}
-            {order.created && (
-              <div className="col-span-2">
-                <span className="font-semibold text-slate-500">Placed On: </span>
-                {order.created}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Notes */}
-        {order.notes && (
-          <p className="text-xs text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-3 line-clamp-2">
-            {order.notes}
-          </p>
-        )}
-
-        {/* Rejection reason */}
-        {order.status === 'Rejected' && order.rejectionReason && (
-          <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2 mb-3">
-            <p className="text-[11px] font-semibold text-red-500 mb-0.5">Rejection Reason</p>
-            <p className="text-xs text-red-700">{order.rejectionReason}</p>
-          </div>
-        )}
-
-        {/* Progress bar */}
-        {order.progress && order.progress !== '0%' && (
-          <div className="mt-auto pt-2">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Progress</span>
-              <span className="text-[10px] font-bold text-emerald-600">{order.progress}</span>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5">
-              <div
-                className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
-                style={{ width: order.progress }}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Actions bar at bottom of card */}
-        <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+        <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
               <Calendar size={14} />
@@ -243,7 +180,7 @@ function ProductCard({ order, onDelete }: { order: Order; onDelete: (order: Orde
               title="Chat with support about this piece"
             >
               <MessageCircle size={13} className="text-emerald-600 group-hover/chat:text-white transition-colors" />
-              <span>Chat</span>
+              <span>Chat Now</span>
             </button>
           </div>
         </div>
