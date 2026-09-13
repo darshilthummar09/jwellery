@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { Settings, Bell, Shield, Check, Sparkles } from 'lucide-react';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { PageTitle } from '../../components/common/PageTitle';
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
 };
 
 export function SettingsPage() {
+  const { user } = useAuth();
   const {
     getUnreadCount,
     triggerTestNotification,
@@ -192,7 +194,7 @@ export function SettingsPage() {
                 {pushPermission !== 'granted' && (
                   <button
                     type="button"
-                    onClick={() => enablePushNotifications()}
+                    onClick={() => enablePushNotifications(user?.id)}
                     className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
                   >
                     Request Push Permission

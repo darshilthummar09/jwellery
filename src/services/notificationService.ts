@@ -155,6 +155,7 @@ export const requestPushPermission = async (userId?: string): Promise<{
     try {
       token = await getToken(messaging, {
         serviceWorkerRegistration: registration,
+        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
       });
     } catch (e: any) {
       console.warn('FCM getToken notice:', e?.message || e);
