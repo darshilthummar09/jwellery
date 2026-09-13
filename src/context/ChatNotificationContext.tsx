@@ -552,17 +552,28 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
                 if (isMessageAlreadyNotified(msg.id)) return;
 
                 const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
-                const myId = currentUser?.id || '';
+                const myId = (currentUser?.id || '').toLowerCase();
+                const myName = (currentUser?.name || '').toLowerCase();
+                const myEmail = (currentUser?.email || '').toLowerCase();
+                const threadCustId = (thread.customerId || '').toLowerCase();
+                const threadCustName = (thread.customerName || '').toLowerCase();
 
                 let isForMe = false;
                 if (myRole === 'admin') {
                   isForMe = msg.from === 'customer' || msg.from === 'designer';
                 } else if (myRole === 'customer') {
-                  isForMe = (msg.from === 'admin' || msg.from === 'designer') &&
-                    (!myId || thread.customerId === myId || thread.id === `customer-${myId}` || thread.id === `order-${myId}`);
+                  const isCustomerMatch =
+                    !myId ||
+                    threadCustId === myId ||
+                    (myEmail && threadCustId === myEmail) ||
+                    (myName && threadCustName === myName) ||
+                    thread.id === `customer-${currentUser?.id}` ||
+                    (currentUser?.id && thread.id.includes(currentUser.id));
+
+                  isForMe = (msg.from === 'admin' || msg.from === 'designer') && isCustomerMatch;
                 } else if (myRole === 'designer') {
                   isForMe = msg.from === 'admin' &&
-                    (!myId || thread.customerName === myId || thread.id.includes(myId));
+                    (!myId || threadCustName === myId || (myName && threadCustName === myName) || (currentUser?.id && thread.id.includes(currentUser.id)));
                 }
 
                 markMessageAsNotified(msg.id);

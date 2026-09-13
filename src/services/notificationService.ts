@@ -285,28 +285,31 @@ export const showLocalNotification = (title: string, options?: NotificationOptio
       ...options,
     };
 
+    let shown = false;
     try {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification(title, finalOptions).catch(() => {
-            try {
-              new Notification(title, finalOptions);
-            } catch {
-              // Ignore if browser restricts new Notification on mobile
-            }
-          });
-        }).catch(() => {
-          try {
-            new Notification(title, finalOptions);
-          } catch {
-            // Ignore
-          }
-        });
-      } else {
-        new Notification(title, finalOptions);
-      }
-    } catch (e) {
-      console.warn('Could not display local notification:', e);
+      // 1. Immediate native notification (instant for desktop browsers)
+      const notif = new Notification(title, finalOptions);
+      shown = true;
+      notif.onclick = () => {
+        try {
+          window.focus();
+        } catch {}
+        const targetUrl = (finalOptions as any)?.data?.url;
+        if (targetUrl) {
+          window.location.href = targetUrl;
+        }
+      };
+    } catch {
+      // Notification constructor might throw on mobile Chrome where ServiceWorker is required
+    }
+
+    // 2. Service Worker fallback/support for mobile/PWA
+    if (!shown && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) {
+          reg.showNotification(title, finalOptions).catch(() => {});
+        }
+      }).catch(() => {});
     }
   }
 };
