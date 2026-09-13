@@ -86,42 +86,42 @@ function NotificationBell() {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-11 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 z-20 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-              <span className="font-semibold text-slate-800 text-sm">
+          <div className="fixed inset-0 z-40 bg-slate-900/10 sm:bg-transparent" onClick={() => setOpen(false)} />
+          <div className="fixed inset-x-3.5 top-[4.25rem] sm:inset-x-auto sm:right-0 sm:absolute sm:top-11 w-auto sm:w-80 sm:max-w-80 bg-white rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200/80 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-white">
+              <span className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 Notifications
                 {unreadCount > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">
                     {unreadCount}
                   </span>
                 )}
               </span>
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-emerald-600 font-medium cursor-pointer hover:underline"
+                className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer"
               >
                 Mark all read
               </button>
             </div>
 
             {/* PWA Device Push & Icon Badge Prompt / Status */}
-            <div className="bg-slate-50/80 px-4 py-2 border-b border-slate-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 text-slate-600">
+            <div className="bg-slate-50/90 px-4 py-2 border-b border-slate-100 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
                 <span className={`w-2 h-2 rounded-full ${pushPermission === 'granted' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                <span>{pushPermission === 'granted' ? 'PWA Badges & Push Active' : 'Device Push & Badges'}</span>
+                <span className="truncate">{pushPermission === 'granted' ? 'PWA Badges & Push Active' : 'Device Push & Badges'}</span>
               </div>
               {pushPermission !== 'granted' && (
                 <button
                   onClick={handleEnablePush}
                   disabled={isEnabling}
-                  className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] transition-colors disabled:opacity-50"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition-colors disabled:opacity-50 cursor-pointer flex-shrink-0 ml-2"
                 >
                   {isEnabling ? 'Enabling...' : 'Enable'}
                 </button>
               )}
             </div>
-            <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
+            <div className="divide-y divide-slate-50 max-h-[60vh] sm:max-h-64 overflow-y-auto">
               {myNotifications.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-slate-400">No notifications</div>
               ) : (
@@ -157,22 +157,23 @@ function NotificationBell() {
                       <span className="mt-1.5 w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
                     )}
                     {n.read && <span className="mt-1.5 w-2 h-2 flex-shrink-0" />}
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{n.title}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{n.body}</p>
-                      <p className="text-[10px] text-slate-300 mt-0.5">{n.time}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{n.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-medium">{n.time}</p>
                     </div>
                   </div>
                 ))
               )}
             </div>
-            <div className="px-4 py-2.5 border-t border-slate-100 text-center">
-              <span
+            <div className="px-4 py-2.5 border-t border-slate-100 text-center bg-slate-50/50">
+              <button
+                type="button"
                 onClick={handleViewAll}
-                className="text-xs text-slate-500 cursor-pointer hover:text-emerald-600 hover:underline transition-colors"
+                className="text-xs text-slate-600 cursor-pointer hover:text-emerald-700 font-semibold transition-colors"
               >
                 View all notifications
-              </span>
+              </button>
             </div>
           </div>
         </>
@@ -230,34 +231,37 @@ function UserDropdown() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] max-w-56 bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 z-20 overflow-hidden">
-          {/* User info header */}
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <div className="text-sm font-semibold text-slate-800">{user?.name}</div>
-            <div className="text-xs text-slate-400 mt-0.5">{user?.email}</div>
-          </div>
+        <>
+          <div className="fixed inset-0 z-40 bg-slate-900/10 sm:bg-transparent" onClick={() => setOpen(false)} />
+          <div className="fixed right-3.5 top-[4.25rem] sm:absolute sm:right-0 sm:top-12 w-56 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200/80 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* User info header */}
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <div className="text-sm font-bold text-slate-800 truncate">{user?.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5 truncate">{user?.email}</div>
+            </div>
 
-          <div className="py-1.5">
-            <button
-              onClick={() => { setProfileModalOpen(true); setOpen(false); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <UserIcon size={15} className="text-slate-400" />
-              My Profile
-            </button>
-          </div>
+            <div className="py-1.5">
+              <button
+                onClick={() => { setProfileModalOpen(true); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <UserIcon size={15} className="text-slate-400" />
+                My Profile
+              </button>
+            </div>
 
-          <div className="border-t border-slate-100 py-1.5">
-            <button
-              id="logout-button"
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <LogOut size={15} />
-              Log out
-            </button>
+            <div className="border-t border-slate-100 py-1.5">
+              <button
+                id="logout-button"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer font-medium"
+              >
+                <LogOut size={15} />
+                Log out
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Profile Modal */}
