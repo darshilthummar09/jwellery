@@ -11,16 +11,12 @@ import {
   Gem,
   Paperclip,
   Trash2,
-  ChevronRight,
   Clock,
-  Sparkles,
 } from 'lucide-react';
-import { PageContainer } from '../../components/layout/PageContainer';
-import { PageTitle } from '../../components/common/PageTitle';
 import { useAuth } from '../../hooks/useAuth';
 import { Avatar } from '../../components/common/Avatar';
 import { useChatNotification } from '../../context/ChatNotificationContext';
-import type { ChatAttachment, ChatThread } from '../../context/ChatNotificationContext';
+import type { ChatAttachment } from '../../context/ChatNotificationContext';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
 
 function formatFileSize(size: number) {
@@ -98,7 +94,12 @@ export function GeneralChatPage() {
   const [input, setInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
-  const [showMobileList, setShowMobileList] = useState(false);
+  
+  // Track WhatsApp-style mobile screen state (list vs active chat)
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(
+    Boolean(requestedThreadId || requestedOrderId)
+  );
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -144,7 +145,7 @@ export function GeneralChatPage() {
       ];
     }
     return my;
-  }, [threads, customerId, customerName]);
+  }, [threads, customerId, customerName, requestedThreadId]);
 
   // 2. Select initial or requested thread
   const [selectedThreadId, setSelectedThreadId] = useState<string>(() => {
@@ -160,9 +161,13 @@ export function GeneralChatPage() {
   useEffect(() => {
     if (requestedThreadId && customerThreads.some((t) => t.id === requestedThreadId)) {
       setSelectedThreadId(requestedThreadId);
+      setIsMobileChatOpen(true);
     } else if (requestedOrderId) {
       const match = customerThreads.find((t) => t.orderId === requestedOrderId || t.id === `order-${requestedOrderId}`);
-      if (match) setSelectedThreadId(match.id);
+      if (match) {
+        setSelectedThreadId(match.id);
+        setIsMobileChatOpen(true);
+      }
     } else if (!customerThreads.some((t) => t.id === selectedThreadId) && customerThreads.length > 0) {
       setSelectedThreadId(customerThreads[0].id);
     }
@@ -182,8 +187,13 @@ export function GeneralChatPage() {
 
   const handleSelectThread = (threadId: string) => {
     setSelectedThreadId(threadId);
+    setIsMobileChatOpen(true);
     setSearchParams({ thread: threadId }, { replace: true });
-    setShowMobileList(false);
+  };
+
+  const handleBackToList = () => {
+    setIsMobileChatOpen(false);
+    setSearchParams({}, { replace: true });
   };
 
   const handleFilesSelected = async (files: FileList | null) => {
@@ -226,29 +236,22 @@ export function GeneralChatPage() {
   const messages = activeThread?.messages ?? [];
 
   return (
-    <div className="flex-1 p-3 sm:p-4 h-[calc(100vh-4.25rem)] overflow-hidden flex flex-col max-w-screen-2xl mx-auto w-full">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex overflow-hidden relative h-full flex-1">
-        {/* ─── Left Sidebar: Thread List ─── */}
+    <div className="flex-1 p-0 sm:p-4 h-[calc(100dvh-4rem)] sm:h-[calc(100vh-4.25rem)] overflow-hidden flex flex-col max-w-screen-2xl mx-auto w-full">
+      <div className="bg-white rounded-none sm:rounded-2xl border-0 sm:border border-slate-200 shadow-none sm:shadow-sm flex overflow-hidden relative h-full flex-1">
+        
+        {/* ─── Left Sidebar: Order-wise Conversations List ─── */}
         <div
-          className={`w-full md:w-80 border-r border-slate-100 flex flex-col bg-slate-50/60 z-10 md:static absolute inset-0 transition-transform ${
-            showMobileList ? 'translate-x-0 bg-white' : '-translate-x-full md:translate-x-0'
+          className={`w-full md:w-80 lg:w-96 md:border-r border-slate-200/80 flex flex-col bg-slate-50/60 h-full flex-shrink-0 ${
+            isMobileChatOpen ? 'hidden md:flex' : 'flex'
           }`}
         >
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+          <div className="p-3.5 sm:p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                 <MessageCircle size={17} />
               </div>
-              <span className="font-semibold text-slate-800 text-sm">Conversations</span>
+              <span className="font-bold text-slate-900 text-sm">Order Chats</span>
             </div>
-            {showMobileList && (
-              <button
-                onClick={() => setShowMobileList(false)}
-                className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X size={18} />
-              </button>
-            )}
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1">
@@ -261,8 +264,8 @@ export function GeneralChatPage() {
                   onClick={() => handleSelectThread(t.id)}
                   className={`p-3 rounded-xl cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'hover:bg-white bg-slate-50/50 text-slate-700 border border-transparent hover:border-slate-200/60'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'hover:bg-white bg-slate-50/70 text-slate-700 border border-transparent hover:border-slate-200/60 active:bg-slate-100'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
@@ -296,17 +299,25 @@ export function GeneralChatPage() {
         </div>
 
         {/* ─── Right Area: Active Chat Window ─── */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white">
+        <div
+          className={`flex-1 flex flex-col min-w-0 bg-white h-full ${
+            isMobileChatOpen ? 'flex' : 'hidden md:flex'
+          }`}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-white">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between px-3 sm:px-5 py-3 border-b border-slate-200 bg-white flex-shrink-0 shadow-2xs">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              {/* WhatsApp-style Back Button on Mobile */}
               <button
-                onClick={() => setShowMobileList(true)}
-                className="md:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 mr-1"
-                title="View Conversations"
+                type="button"
+                onClick={handleBackToList}
+                className="md:hidden p-2 -ml-1 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition-colors cursor-pointer flex-shrink-0"
+                title="Back to conversations list"
+                aria-label="Back to conversations list"
               >
-                <ChevronRight size={18} className="rotate-180" />
+                <ArrowLeft size={20} />
               </button>
+
               <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
                 {activeThread?.orderName ? (
                   <Gem size={18} className="text-emerald-600" />
@@ -315,8 +326,8 @@ export function GeneralChatPage() {
                 )}
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-slate-800 text-sm truncate">
-                  {activeThread?.orderName ? `Order Discussion: ${activeThread.orderName}` : 'Dream Jewels Support Team'}
+                <p className="font-bold text-slate-900 text-sm truncate">
+                  {activeThread?.orderName ? `Order: ${activeThread.orderName}` : 'Dream Jewels Support Team'}
                 </p>
                 <p className="text-xs flex items-center gap-1.5 text-emerald-600 font-medium">
                   <span className="w-2 h-2 rounded-full inline-block bg-emerald-500 animate-pulse" />
@@ -336,7 +347,7 @@ export function GeneralChatPage() {
           </div>
 
           {/* Message feed */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-slate-50/30">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-4 bg-slate-50/30">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center px-4">
                 <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mb-3">
@@ -359,7 +370,7 @@ export function GeneralChatPage() {
                   return (
                     <div key={msg.id} className="flex items-start gap-2.5">
                       <Avatar user={{ name: 'Dream Jewels Support' }} size="xs" />
-                      <div className="max-w-[85%] flex flex-col gap-1">
+                      <div className="max-w-[95%] sm:max-w-[85%] flex flex-col gap-1">
                         <div className="rounded-2xl rounded-bl-sm overflow-hidden border border-slate-200 shadow-sm bg-white">
                           <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2.5">
                             <span className="text-white font-bold text-sm tracking-wide">Your Order Summary</span>
@@ -382,7 +393,7 @@ export function GeneralChatPage() {
                                     <span className="text-slate-400 font-medium whitespace-nowrap w-24 flex-shrink-0">
                                       {row.slice(0, colonIdx + 1).trim()}
                                     </span>
-                                    <span className="text-slate-800 font-semibold">
+                                    <span className="text-slate-800 font-semibold truncate">
                                       {row.slice(colonIdx + 1).trim()}
                                     </span>
                                   </div>
@@ -413,7 +424,7 @@ export function GeneralChatPage() {
                     className={`flex items-end gap-2.5 group ${isMe ? 'flex-row-reverse' : ''}`}
                   >
                     {!isMe && <Avatar user={{ name: 'Support' }} size="xs" />}
-                    <div className={`max-w-[75%] flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                    <div className={`max-w-[85%] sm:max-w-[75%] flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
                       <div
                         className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                           isMe
@@ -436,7 +447,7 @@ export function GeneralChatPage() {
                         {isMe && activeThread && (
                           <button
                             onClick={() => deleteMessage(activeThread.id, msg.id)}
-                            className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-0.5"
+                            className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-0.5 cursor-pointer"
                             title="Delete message"
                           >
                             <Trash2 size={11} />
@@ -453,7 +464,7 @@ export function GeneralChatPage() {
 
           {/* Pending attachments preview bar */}
           {pendingAttachments.length > 0 && (
-            <div className="px-5 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2 overflow-x-auto">
+            <div className="px-3 sm:px-5 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2 overflow-x-auto">
               {pendingAttachments.map((att) => (
                 <div
                   key={att.id}
@@ -478,7 +489,7 @@ export function GeneralChatPage() {
           )}
 
           {/* Input Bar */}
-          <div className="px-5 py-4 border-t border-slate-100 flex items-center gap-2 sm:gap-3 bg-white">
+          <div className="px-3 sm:px-5 py-3 sm:py-4 border-t border-slate-100 flex items-center gap-2 sm:gap-3 bg-white flex-shrink-0">
             <Avatar user={user} size="xs" />
 
             <input
@@ -493,7 +504,7 @@ export function GeneralChatPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-10 h-10 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
               title="Attach images, documents or sketches"
             >
               <Paperclip size={17} />
@@ -503,13 +514,13 @@ export function GeneralChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Type a message or share design sketches..."
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-base sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
+              placeholder="Type a message..."
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-base sm:text-sm text-slate-900 font-medium placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-100 transition-all"
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() && pendingAttachments.length === 0}
-              className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex-shrink-0 cursor-pointer"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex-shrink-0 cursor-pointer"
             >
               <Send size={15} />
             </button>
@@ -559,3 +570,4 @@ export function GeneralChatPage() {
     </div>
   );
 }
+

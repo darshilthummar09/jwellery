@@ -2,23 +2,18 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import {
   FileText,
-  Image as ImageIcon,
   MessageSquare,
   Paperclip,
   Send,
-  Video,
   X,
   Download,
   Search,
   ExternalLink,
   Gem,
-  CheckCircle2,
   Trash2,
+  ArrowLeft,
 } from 'lucide-react';
-import { PageContainer } from '../../components/layout/PageContainer';
-import { PageTitle } from '../../components/common/PageTitle';
 import { Avatar } from '../../components/common/Avatar';
-import { EmptyState } from '../../components/common/EmptyState';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { ChatAttachment, useChatNotification } from '../../context/ChatNotificationContext';
 import { compressImageFile, readFileAsDataUrl } from '../../utils/imageCompression';
@@ -119,6 +114,8 @@ export function ChatsPage() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
     requestedThreadId || (threads.length > 0 ? threads[0].id : null)
   );
+  // Controls WhatsApp-style mobile screen toggle (list vs chat)
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(Boolean(requestedThreadId));
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'All' | 'Unread'>('All');
   const [input, setInput] = useState('');
@@ -130,8 +127,7 @@ export function ChatsPage() {
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
 
-  // Most-recently-active conversation first, like WhatsApp — a thread's last
-  // message id is a Date.now()-based timestamp, so it doubles as a recency key.
+  // Most-recently-active conversation first, like WhatsApp
   const sortedThreads = useMemo(() => {
     const recencyOf = (t: (typeof threads)[number]) => t.messages[t.messages.length - 1]?.id ?? 0;
     return [...threads].sort((a, b) => recencyOf(b) - recencyOf(a));
@@ -155,6 +151,7 @@ export function ChatsPage() {
   useEffect(() => {
     if (requestedThreadId && threads.some((thread) => thread.id === requestedThreadId)) {
       setSelectedThreadId(requestedThreadId);
+      setIsMobileChatOpen(true);
     } else if (!selectedThreadId && threads.length > 0) {
       setSelectedThreadId(threads[0].id);
     }
@@ -172,7 +169,13 @@ export function ChatsPage() {
 
   const selectThread = (threadId: string) => {
     setSelectedThreadId(threadId);
+    setIsMobileChatOpen(true);
     setSearchParams({ thread: threadId }, { replace: true });
+  };
+
+  const handleBackToList = () => {
+    setIsMobileChatOpen(false);
+    setSearchParams({}, { replace: true });
   };
 
   const handleFilesSelected = async (files: FileList | null) => {
@@ -230,18 +233,22 @@ export function ChatsPage() {
   const totalUnreadCount = threads.reduce((sum, thread) => sum + thread.unread, 0);
 
   return (
-    <div className="flex-1 p-3 sm:p-4 h-[calc(100vh-4.25rem)] overflow-hidden flex flex-col max-w-screen-2xl mx-auto w-full">
+    <div className="flex-1 p-0 sm:p-4 h-[calc(100dvh-4rem)] sm:h-[calc(100vh-4.25rem)] overflow-hidden flex flex-col max-w-screen-2xl mx-auto w-full">
       {/* Main Messaging Container */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col flex-1">
-        <div className="grid grid-cols-1 md:grid-cols-12 h-full flex-1 overflow-hidden">
+      <div className="bg-white rounded-none sm:rounded-2xl border-0 sm:border border-slate-200 shadow-none sm:shadow-sm overflow-hidden h-full flex flex-col flex-1">
+        <div className="flex h-full flex-1 overflow-hidden">
           
-          {/* ── Left Panel: Conversations List ── */}
-          <div className="md:col-span-5 lg:col-span-4 border-r border-slate-200/90 flex flex-col h-full overflow-hidden bg-slate-50/50">
+          {/* ── Left Panel: Order-wise Conversations List ── */}
+          <div
+            className={`w-full md:w-[380px] lg:w-[420px] md:border-r border-slate-200/90 flex flex-col h-full overflow-hidden bg-slate-50/50 flex-shrink-0 ${
+              isMobileChatOpen ? 'hidden md:flex' : 'flex'
+            }`}
+          >
             {/* Header & Filter */}
-            <div className="p-3.5 border-b border-slate-200 bg-white flex-shrink-0 space-y-2.5">
+            <div className="p-3 sm:p-3.5 border-b border-slate-200 bg-white flex-shrink-0 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-900 text-sm tracking-tight">Conversations</h3>
+                  <h3 className="font-bold text-slate-900 text-sm tracking-tight">Order Chats</h3>
                   {totalUnreadCount > 0 && (
                     <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-bold shadow-2xs">
                       {totalUnreadCount} new
@@ -309,7 +316,7 @@ export function ChatsPage() {
                       onClick={() => selectThread(thread.id)}
                       className={`w-full flex items-start gap-3 p-3.5 text-left transition-all cursor-pointer relative ${
                         isSelected
-                          ? 'bg-emerald-50/70 border-l-4 border-l-emerald-600 shadow-2xs'
+                          ? 'bg-emerald-50/80 md:border-l-4 md:border-l-emerald-600 shadow-2xs'
                           : 'hover:bg-white active:bg-slate-100'
                       }`}
                     >
@@ -373,12 +380,27 @@ export function ChatsPage() {
           </div>
 
           {/* ── Right Panel: Chat Thread Content ── */}
-          <div className="md:col-span-7 lg:col-span-8 flex flex-col h-full overflow-hidden bg-slate-50/40">
+          <div
+            className={`flex-1 flex flex-col h-full overflow-hidden bg-slate-50/40 min-w-0 ${
+              isMobileChatOpen ? 'flex' : 'hidden md:flex'
+            }`}
+          >
             {selectedThread ? (
               <>
                 {/* Active Chat Header */}
-                <div className="px-5 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-3 flex-shrink-0 shadow-2xs">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="px-3 sm:px-5 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-2 sm:gap-3 flex-shrink-0 shadow-2xs">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    {/* WhatsApp-style Back Button on Mobile */}
+                    <button
+                      type="button"
+                      onClick={handleBackToList}
+                      className="md:hidden p-2 -ml-1 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition-colors cursor-pointer flex-shrink-0"
+                      title="Back to conversations list"
+                      aria-label="Back to conversations list"
+                    >
+                      <ArrowLeft size={20} />
+                    </button>
+
                     {linkedOrder?.image ? (
                       <img
                         src={linkedOrder.image}
@@ -404,7 +426,7 @@ export function ChatsPage() {
                   </div>
 
                   {/* Header Actions */}
-                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
                     {selectedThread.orderId && (
                       <button
                         onClick={() => navigate(`/dashboard/admin/orders?search=${encodeURIComponent(selectedThread.orderId || '')}`)}
@@ -415,7 +437,7 @@ export function ChatsPage() {
                         <ExternalLink size={12} />
                       </button>
                     )}
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold rounded-full">
+                    <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold rounded-full">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span>Live</span>
                     </div>
@@ -431,7 +453,7 @@ export function ChatsPage() {
 
                 {/* Persistent Order Summary Ribbon */}
                 {linkedOrder && (
-                  <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-teal-950 text-white px-5 py-2.5 flex items-center justify-between gap-3 text-xs flex-shrink-0 shadow-inner">
+                  <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-teal-950 text-white px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-between gap-3 text-xs flex-shrink-0 shadow-inner">
                     <div className="flex items-center gap-3 overflow-x-auto scrollbar-none py-0.5">
                       <div className="flex items-center gap-1.5 font-semibold text-emerald-300 whitespace-nowrap">
                         <Gem size={13} />
@@ -459,7 +481,7 @@ export function ChatsPage() {
                 )}
 
                 {/* Messages Feed */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-4">
                   {selectedThread.messages.map((msg) => {
                     const isAdmin = msg.from === 'admin';
                     const isOrderCard =
@@ -472,7 +494,7 @@ export function ChatsPage() {
                       return (
                         <div key={msg.id} className="flex items-start gap-2.5 my-2">
                           <Avatar user={{ name: 'Dream Jewels Support' }} size="xs" />
-                          <div className="max-w-[90%] sm:max-w-[80%] flex flex-col gap-1">
+                          <div className="max-w-[95%] sm:max-w-[80%] flex flex-col gap-1">
                             <div className="rounded-2xl rounded-bl-xs overflow-hidden border border-emerald-200 shadow-sm bg-white">
                               {/* Order Card Title Bar */}
                               <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 px-4 py-2.5 flex items-center justify-between text-white">
@@ -486,7 +508,7 @@ export function ChatsPage() {
                               </div>
 
                               {/* Specs grid */}
-                              <div className="p-4 space-y-2">
+                              <div className="p-3 sm:p-4 space-y-2">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                                   {rows.slice(2).map((row, i) => {
                                     if (row.startsWith('──') || row.startsWith('--')) return null;
@@ -520,7 +542,7 @@ export function ChatsPage() {
                     return (
                       <div key={msg.id} className={`flex items-end gap-2.5 ${isAdmin ? 'flex-row-reverse' : ''}`}>
                         <Avatar user={{ name: isAdmin ? 'You' : selectedThread.customerName }} size="xs" />
-                        <div className={`max-w-[80%] sm:max-w-[70%] flex flex-col gap-1 ${isAdmin ? 'items-end' : 'items-start'}`}>
+                        <div className={`max-w-[85%] sm:max-w-[70%] flex flex-col gap-1 ${isAdmin ? 'items-end' : 'items-start'}`}>
                           <div className="flex items-center gap-2 group">
                             {isAdmin && (
                               <button
@@ -558,7 +580,7 @@ export function ChatsPage() {
 
                 {/* Attachments Pending Preview */}
                 {pendingAttachments.length > 0 && (
-                  <div className="px-5 py-2 bg-slate-100/90 border-t border-slate-200 flex items-center gap-2 overflow-x-auto">
+                  <div className="px-3 sm:px-5 py-2 bg-slate-100/90 border-t border-slate-200 flex items-center gap-2 overflow-x-auto">
                     {pendingAttachments.map((att) => (
                       <div key={att.id} className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-xs shadow-2xs flex-shrink-0">
                         {att.kind === 'image' ? (
@@ -580,7 +602,7 @@ export function ChatsPage() {
                 )}
 
                 {/* Input Area */}
-                <div className="p-3.5 bg-white border-t border-slate-200 flex items-center gap-2 flex-shrink-0">
+                <div className="p-2.5 sm:p-3.5 bg-white border-t border-slate-200 flex items-center gap-2 flex-shrink-0">
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -606,15 +628,15 @@ export function ChatsPage() {
                         handleSend();
                       }
                     }}
-                    placeholder="Type your message to customer..."
-                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100 transition-all text-slate-900 placeholder:text-slate-400"
+                    placeholder="Type your message..."
+                    className="flex-1 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-100 transition-all text-slate-900 placeholder:text-slate-400"
                   />
 
                   <button
                     type="button"
                     onClick={handleSend}
                     disabled={!input.trim() && pendingAttachments.length === 0}
-                    className="p-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex-shrink-0"
+                    className="p-2 sm:p-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white rounded-xl shadow-xs transition-colors cursor-pointer flex-shrink-0"
                     title="Send message"
                   >
                     <Send size={16} />
@@ -679,6 +701,7 @@ export function ChatsPage() {
             if (selectedThreadId === deletingThreadId) {
               const remaining = threads.filter((t) => t.id !== deletingThreadId);
               setSelectedThreadId(remaining.length > 0 ? remaining[0].id : null);
+              setIsMobileChatOpen(false);
             }
             setDeletingThreadId(null);
           }}
@@ -688,3 +711,4 @@ export function ChatsPage() {
     </div>
   );
 }
+
