@@ -271,6 +271,7 @@ export const registerForegroundPushListener = (
 
 /**
  * Triggers a local system notification banner immediately (if permission is granted).
+ * Automatically collapses duplicate notifications sharing the same tag.
  */
 export const showLocalNotification = (title: string, options?: NotificationOptions & { silent?: boolean }) => {
   if (!options?.silent) {
@@ -278,24 +279,36 @@ export const showLocalNotification = (title: string, options?: NotificationOptio
   }
 
   if (isPushSupported() && Notification.permission === 'granted') {
+    const finalOptions: NotificationOptions = {
+      icon: '/pwa-192x192-v4.png',
+      badge: '/pwa-192x192-v4.png',
+      ...options,
+    };
+
     try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification(title, {
-            icon: '/pwa-192x192-v4.png',
-            badge: '/pwa-192x192-v4.png',
-            ...options,
+          reg.showNotification(title, finalOptions).catch(() => {
+            try {
+              new Notification(title, finalOptions);
+            } catch {
+              // Ignore if browser restricts new Notification on mobile
+            }
           });
+        }).catch(() => {
+          try {
+            new Notification(title, finalOptions);
+          } catch {
+            // Ignore
+          }
         });
       } else {
-        new Notification(title, {
-          icon: '/pwa-192x192-v4.png',
-          ...options,
-        });
+        new Notification(title, finalOptions);
       }
     } catch (e) {
       console.warn('Could not display local notification:', e);
     }
   }
 };
+
 

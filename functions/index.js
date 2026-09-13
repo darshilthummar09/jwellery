@@ -173,7 +173,7 @@ async function collectTokensForRole(role, senderId) {
 }
 
 exports.sendChatPush = onCall(async (request) => {
-  const { senderId, targetUserId, targetRole, title, body, threadId, orderId, badgeCount } = request.data || {};
+  const { senderId, messageId, targetUserId, targetRole, title, body, threadId, orderId, badgeCount } = request.data || {};
 
   if (!senderId || !title || !body || (!targetUserId && !targetRole)) {
     return { sent: 0, error: 'senderId, targetUserId or targetRole, plus title and body, are required.' };
@@ -183,21 +183,10 @@ exports.sendChatPush = onCall(async (request) => {
     ? await collectTokensForUser(targetUserId)
     : await collectTokensForRole(targetRole, senderId);
 
-  // NOTE: recipients are already excluded-by-account-id above (collectTokensForRole
-  // drops senderId from its candidate users; the targetUserId path only ever
-  // looks up the one specific *other* account being messaged). We deliberately
-  // do NOT also filter out any token that happens to match one of the sender's
-  // own registered tokens: an FCM token is tied to the browser's Service
-  // Worker installation, not to whichever account is logged into a given tab,
-  // so testing admin and customer accounts in the same browser makes both
-  // accounts register the identical token. Excluding "the sender's token"
-  // then wrongly excluded the recipient's only token too, silently dropping
-  // every push. The client already guards the sender from seeing their own
-  // message as a push banner (see the isFromThisUser check in
-  // ChatNotificationContext's foreground listener).
   const uniqueTokens = [...new Set(recipient.tokens)];
 
   console.log('[sendChatPush] Sender ID:', senderId);
+  console.log('[sendChatPush] Message ID:', messageId);
   console.log('[sendChatPush] Receiver ID:', targetUserId || `role:${targetRole}`);
   console.log('[sendChatPush] Notification Target Token:', uniqueTokens);
 
@@ -212,6 +201,7 @@ exports.sendChatPush = onCall(async (request) => {
 
   const data = {
     type: 'chat-message',
+    messageId: messageId ? String(messageId) : '',
     threadId: threadId || '',
     orderId: orderId || '',
     role: effectiveRole,

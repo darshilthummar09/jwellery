@@ -13,6 +13,8 @@ import { firebaseFunctions } from './firebase';
 export interface ChatPushPayload {
   /** Authenticated sender; the server excludes this user's tokens. */
   senderId: string;
+  /** Unique message ID to prevent duplicate push popups. */
+  messageId?: number | string;
   /** Push a specific user's current device (e.g. a single customer). */
   targetUserId?: string;
   /** Push every currently-logged-in device for a role's shared inbox (e.g. 'admin') or target role. */

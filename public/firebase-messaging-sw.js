@@ -34,14 +34,17 @@ if (messaging) {
     const badgeCount = parseInt(payload.data?.badgeCount || payload.data?.unreadCount, 10);
     const targetUrl = payload.data?.url || '/';
 
-    const threadTag = payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification');
+    const msgTag = payload.data?.messageId 
+      ? `chat-msg-${payload.data.messageId}` 
+      : (payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification'));
 
     const notificationOptions = {
       body: notificationBody,
       icon: '/pwa-192x192-v4.png',
       badge: '/pwa-192x192-v4.png',
       vibrate: [200, 100, 200],
-      tag: threadTag,
+      tag: msgTag,
+      renotify: false,
       data: {
         url: targetUrl,
         badgeCount: !isNaN(badgeCount) ? badgeCount : undefined
@@ -68,14 +71,17 @@ self.addEventListener('push', (event) => {
   try {
     const data = event.data.json();
     const notificationTitle = data.title || data.notification?.title || 'Dream Jewels';
-    const tag = data.tag || data.data?.tag || (data.data?.threadId ? `chat-${data.data.threadId}` : 'dream-jewels-notification');
+    const msgTag = data.messageId || data.data?.messageId
+      ? `chat-msg-${data.messageId || data.data?.messageId}`
+      : (data.tag || data.data?.tag || (data.data?.threadId ? `chat-${data.data.threadId}` : 'dream-jewels-notification'));
 
     const notificationOptions = {
       body: data.body || data.notification?.body || 'New notification',
       icon: '/pwa-192x192-v4.png',
       badge: '/pwa-192x192-v4.png',
       vibrate: [200, 100, 200],
-      tag: tag,
+      tag: msgTag,
+      renotify: false,
       data: {
         url: data.url || data.data?.url || '/'
       }

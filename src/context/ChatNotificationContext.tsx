@@ -282,6 +282,29 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
+  // ─── Deduplication State to Ensure Strict 1 Notification Per Message ─────
+  const notifiedMessageIdsRef = useRef<Set<string | number>>(new Set());
+  const initialMessageSyncDoneRef = useRef<boolean>(false);
+
+  const isMessageAlreadyNotified = useCallback((id: number | string): boolean => {
+    if (notifiedMessageIdsRef.current.has(id)) return true;
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage.getItem(`dj_notif_${id}`)) {
+        return true;
+      }
+    } catch {}
+    return false;
+  }, []);
+
+  const markMessageAsNotified = useCallback((id: number | string): void => {
+    notifiedMessageIdsRef.current.add(id);
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(`dj_notif_${id}`, '1');
+      }
+    } catch {}
+  }, []);
+
   // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
   useEffect(() => {
     const currentRole = currentUser?.role === 'super-admin' ? 'admin' : (currentUser?.role || 'admin');
@@ -345,11 +368,20 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const pushType = payload.data?.type;
 
       if (pushType === 'session-takeover') {
-        showLocalNotification(title, { body });
+        showLocalNotification(title, { body, tag: 'session-takeover' });
         return;
       }
 
       if (pushType === 'chat-message') {
+        const messageId = payload.data?.messageId;
+        if (messageId && isMessageAlreadyNotified(messageId)) {
+          // Strict deduplication: already displayed via RTDB listener or previous push
+          return;
+        }
+        if (messageId) {
+          markMessageAsNotified(messageId);
+        }
+
         const targetUserId = payload.data?.userId || undefined;
         const senderId = payload.data?.senderId || undefined;
         const role =
@@ -381,7 +413,15 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
         if (!isForThisUser || isFromThisUser) return;
 
-        showLocalNotification(title, { body });
+        showLocalNotification(title, {
+          body,
+          tag: messageId ? `chat-msg-${messageId}` : undefined,
+          data: {
+            url: payload.data?.url,
+            threadId: payload.data?.threadId,
+            messageId,
+          }
+        });
         return;
       }
 
@@ -396,7 +436,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
 
     return () => unsub();
-  }, [currentUser?.id, currentUser?.role]);
+  }, [currentUser?.id, currentUser?.role, isMessageAlreadyNotified, markMessageAsNotified]);
 
   const enablePushNotifications = useCallback(async (userId?: string) => {
     const res = await requestPushPermission(userId);
@@ -504,6 +544,58 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         const val = snapshot.val();
         if (val) {
           const parsedThreads = parseThreadsFromState(val);
+
+          // Real-time message detection & single-fire notification for receiver
+          if (initialMessageSyncDoneRef.current) {
+            parsedThreads.forEach((thread) => {
+              (thread.messages || []).forEach((msg) => {
+                if (isMessageAlreadyNotified(msg.id)) return;
+
+                const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
+                const myId = currentUser?.id || '';
+
+                let isForMe = false;
+                if (myRole === 'admin') {
+                  isForMe = msg.from === 'customer' || msg.from === 'designer';
+                } else if (myRole === 'customer') {
+                  isForMe = (msg.from === 'admin' || msg.from === 'designer') &&
+                    (!myId || thread.customerId === myId || thread.id === `customer-${myId}` || thread.id === `order-${myId}`);
+                } else if (myRole === 'designer') {
+                  isForMe = msg.from === 'admin' &&
+                    (!myId || thread.customerName === myId || thread.id.includes(myId));
+                }
+
+                markMessageAsNotified(msg.id);
+
+                if (isForMe) {
+                  const notifTitle = msg.senderName || (myRole === 'customer' ? 'Dream Jewels Support' : 'Customer Message');
+                  const previewText = msg.text || (msg.attachments && msg.attachments.length > 0 ? 'Sent an attachment' : 'New message');
+                  const targetUrl = myRole === 'admin'
+                    ? `/dashboard/admin/chats?thread=${encodeURIComponent(thread.id)}`
+                    : `/dashboard/customer/chat?thread=${encodeURIComponent(thread.id)}`;
+
+                  showLocalNotification(notifTitle, {
+                    body: previewText,
+                    tag: `chat-msg-${msg.id}`,
+                    data: {
+                      threadId: thread.id,
+                      messageId: msg.id,
+                      url: targetUrl,
+                    },
+                  });
+                }
+              });
+            });
+          } else {
+            // First database snapshot: register existing message IDs without alerting
+            parsedThreads.forEach((thread) => {
+              (thread.messages || []).forEach((msg) => {
+                markMessageAsNotified(msg.id);
+              });
+            });
+            initialMessageSyncDoneRef.current = true;
+          }
+
           setThreads((prev) => {
             const prevStr = JSON.stringify(sanitizeForFirebase(prev));
             const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
@@ -912,8 +1004,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       optionalThreadId?: string,
       attachments?: ChatAttachment[]
     ) => {
+      const msgId = newMessageId();
+      markMessageAsNotified(msgId);
+
       const msg: ChatMessage = {
-        id: newMessageId(),
+        id: msgId,
         from: 'customer',
         senderName: customerName,
         text,
@@ -942,8 +1037,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         } else {
           const initialMessages: ChatMessage[] = [];
           if (targetThreadId === `customer-${customerId}`) {
+            const welcomeId = Date.now() - 1000;
+            markMessageAsNotified(welcomeId);
             initialMessages.push({
-              id: Date.now() - 1000,
+              id: welcomeId,
               from: 'admin',
               senderName: 'Dream Jewels Support',
               text: `👋 Welcome to Dream Jewels, ${customerName}! How can our master jewelers assist you today?`,
@@ -982,6 +1079,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       sendChatPushNotification({
         senderId: currentUser?.id || customerId,
+        messageId: msgId,
         targetRole: 'admin',
         title: notifTitle,
         body: notifBody,
@@ -989,12 +1087,15 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount,
       });
     },
-    [threads, currentUser?.id]
+    [threads, currentUser?.id, markMessageAsNotified]
   );
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
+    const msgId = newMessageId();
+    markMessageAsNotified(msgId);
+
     const msg: ChatMessage = {
-      id: newMessageId(),
+      id: msgId,
       from: 'designer',
       senderName: designerName,
       text,
@@ -1031,17 +1132,21 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
     sendChatPushNotification({
       senderId: currentUser?.id || threadId,
+      messageId: msgId,
       targetRole: 'admin',
       title: notifTitle,
       body: notifBody,
       threadId,
       badgeCount,
     });
-  }, [threads, currentUser?.id]);
+  }, [threads, currentUser?.id, markMessageAsNotified]);
 
   const sendAdminMessage = useCallback((threadId: string, text: string, attachments: ChatAttachment[] = []) => {
+    const msgId = newMessageId();
+    markMessageAsNotified(msgId);
+
     const msg: ChatMessage = {
-      id: newMessageId(),
+      id: msgId,
       from: 'admin',
       senderName: 'Dream Jewels Support',
       text,
@@ -1089,6 +1194,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       sendChatPushNotification({
         senderId: currentUser?.id || 'admin',
+        messageId: msgId,
         targetUserId: effectiveTargetUserId || undefined,
         targetRole: recipientRole,
         title: notifTitle,
@@ -1097,7 +1203,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount: (thread.customerUnread || 0) + 1,
       });
     }
-  }, [threads, currentUser?.id, users]);
+  }, [threads, currentUser?.id, users, markMessageAsNotified]);
 
   const markThreadRead = useCallback((threadId: string, as: 'admin' | 'customer' | 'designer') => {
     setThreads((prev) => {
