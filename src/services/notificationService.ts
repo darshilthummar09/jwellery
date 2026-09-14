@@ -89,6 +89,30 @@ export const getPushPermissionState = (): NotificationPermission | 'unsupported'
 };
 
 /**
+ * Unregisters any firebase-messaging-sw.js registration left over from before
+ * it was scoped to '/firebase-cloud-messaging-push-scope'. A registration at
+ * scope '/' fights the main PWA service worker for control of the page, and
+ * since the PWA is registered with autoUpdate, every swap of who controls the
+ * page fires 'controllerchange' and triggers an automatic reload — producing
+ * a rapid reload loop on any device that registered the old, unscoped worker.
+ * Call this unconditionally on every app load (see main.tsx) so devices that
+ * hit the old bug self-heal on their next visit, not only when a user opts
+ * into push notifications via requestPushPermission.
+ */
+export const healStaleServiceWorkerScope = async (): Promise<void> => {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  try {
+    const existing = await navigator.serviceWorker.getRegistrations();
+    for (const r of existing) {
+      if (!r.active?.scriptURL.includes('firebase-messaging-sw.js')) continue;
+      if (!r.scope.includes('firebase-cloud-messaging-push-scope')) {
+        await r.unregister().catch(() => {});
+      }
+    }
+  } catch {}
+};
+
+/**
  * Registers the Service Worker and requests Web Push permissions.
  * Saves the FCM Device Token in Firebase under /userTokens/{userId}/
  */
@@ -109,20 +133,14 @@ export const requestPushPermission = async (userId?: string): Promise<{
     }
 
     // 2. Register Service Worker (reuse if already active)
+    await healStaleServiceWorkerScope();
     let registration: ServiceWorkerRegistration | undefined;
     try {
       const existing = await navigator.serviceWorker.getRegistrations();
       for (const r of existing) {
-        if (!r.active?.scriptURL.includes('firebase-messaging-sw.js')) continue;
-        // Self-heal browsers that already have this SW registered at scope
-        // '/' from before the dedicated push scope existed — leaving that
-        // stale registration in place would keep it fighting the main PWA
-        // service worker for control of '/' and reintroduce the reload loop.
-        if (!r.scope.includes('firebase-cloud-messaging-push-scope')) {
-          await r.unregister().catch(() => {});
-          continue;
+        if (r.active?.scriptURL.includes('firebase-messaging-sw.js') && r.scope.includes('firebase-cloud-messaging-push-scope')) {
+          registration = r;
         }
-        registration = r;
       }
     } catch {}
 
