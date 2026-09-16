@@ -24,7 +24,16 @@ try {
   console.warn('Firebase messaging in service worker initialization error:', e);
 }
 
-// 1. Listen for background push events from FCM when app is completely closed
+// Ensure service worker activates immediately on all platforms/mobile
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
+// 1. Listen for background push events from FCM when app is in background or closed
 if (messaging) {
   messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message:', payload);
@@ -33,6 +42,7 @@ if (messaging) {
     const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new update.';
     const badgeCount = parseInt(payload.data?.badgeCount || payload.data?.unreadCount, 10);
     const targetUrl = payload.data?.url || '/';
+    const tag = payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification');
 
     const msgTag = payload.data?.messageId 
       ? `chat-msg-${payload.data.messageId}` 
@@ -51,9 +61,13 @@ if (messaging) {
       }
     };
 
-    const actions = [
-      self.registration.showNotification(notificationTitle, notificationOptions)
-    ];
+    const hasAutoNotification = Boolean(payload.notification && (payload.notification.title || payload.notification.body));
+    const actions = [];
+
+    // Only display manually if FCM did not already render the notification banner automatically
+    if (!hasAutoNotification) {
+      actions.push(self.registration.showNotification(notificationTitle, notificationOptions));
+    }
 
     // Set or update the app icon badge count on the device Home Screen
     if (!isNaN(badgeCount) && 'setAppBadge' in navigator) {

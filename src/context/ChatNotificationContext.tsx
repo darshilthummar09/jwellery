@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { onValue, ref, set } from 'firebase/database';
-import { firebaseDatabase } from '../services/firebase';
+import { onValue, ref, set, get } from 'firebase/database';
+import { firebaseDatabase, isFirebaseConfigured } from '../services/firebase';
 import {
   setAppBadge,
   clearAppBadge,
@@ -8,11 +8,10 @@ import {
   getPushPermissionState,
   registerForegroundPushListener,
   showLocalNotification,
+  playNotificationSound,
 } from '../services/notificationService';
 import { sendChatPushNotification } from '../services/pushChat';
 import { useAuth } from '../hooks/useAuth';
-import { MOCK_USERS } from '../data/mock-users';
-import { User } from '../types/user.types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -172,8 +171,8 @@ const CHAT_CHANNEL_NAME = 'dream-jewels-live-chat';
 // ─── Seed data ────────────────────────────────────────────────────────────────
 
 export const INITIAL_ORDERS: Order[] = [];
+
 export const INITIAL_THREADS: ChatThread[] = [];
-const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 const DEFAULT_DESIGNER_NAME = 'Riya Sharma';
 
@@ -181,10 +180,13 @@ const createDesignerThreadId = (designerName: string) =>
   `designer-${designerName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
 
 const formatLastMessage = (text: string, attachments?: ChatAttachment[]) => {
-  if (text && text.trim()) return text.trim();
+  if (text.trim()) return text.trim();
   if (!attachments || attachments.length === 0) return '';
   return attachments.length === 1 ? `Sent ${attachments[0].name}` : `Sent ${attachments.length} files`;
 };
+
+import { MOCK_USERS } from '../data/mock-users';
+import { User } from '../types/user.types';
 
 interface StoredChatState {
   threads?: ChatThread[] | Record<string, ChatThread>;
@@ -193,6 +195,57 @@ interface StoredChatState {
   users?: User[] | Record<string, User>;
   notifications?: AppNotification[] | Record<string, AppNotification>;
   notifCounter?: number;
+}
+
+/**
+ * Normalizes user identification across id (usr_customer_001), username (customer1), email, and display names.
+ * Ensures notifications are never dropped due to id vs username differences.
+ */
+export function isMatchingUserId(
+  notifUserId: string | undefined | null,
+  user: User | null | undefined,
+  usersList?: User[]
+): boolean {
+  if (!notifUserId || !user) return false;
+
+  const target = String(notifUserId).toLowerCase().trim();
+  const userId = String(user.id || '').toLowerCase().trim();
+  const username = String(user.username || '').toLowerCase().trim();
+  const email = String(user.email || '').toLowerCase().trim();
+  const name = String(user.name || '').toLowerCase().trim();
+
+  if (target === userId || target === username || target === email || target === name) {
+    return true;
+  }
+
+  if (target.startsWith('customer-')) {
+    const stripped = target.replace('customer-', '');
+    if (stripped === userId || stripped === username || stripped === email || stripped === name) {
+      return true;
+    }
+  }
+
+  const listToSearch = usersList && usersList.length > 0 ? usersList : MOCK_USERS;
+  const matched = listToSearch.find(
+    (u) =>
+      u &&
+      (String(u.id || '').toLowerCase() === target ||
+        String(u.username || '').toLowerCase() === target ||
+        String(u.email || '').toLowerCase() === target ||
+        String(u.name || '').toLowerCase() === target)
+  );
+
+  if (matched) {
+    const mId = String(matched.id || '').toLowerCase();
+    const mUser = String(matched.username || '').toLowerCase();
+    const mEmail = String(matched.email || '').toLowerCase();
+    const mName = String(matched.name || '').toLowerCase();
+    if (mId === userId || mUser === username || mEmail === email || mName === name) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** Parses an orders collection from Firebase or LocalStorage whether it's an Array or Object map */
@@ -254,6 +307,7 @@ function readOrders(state: StoredChatState): Order[] {
 
 function loadStoredChatState(): StoredChatState | null {
   if (typeof window === 'undefined') return null;
+
   try {
     const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
     if (!raw) return null;
@@ -261,6 +315,64 @@ function loadStoredChatState(): StoredChatState | null {
   } catch {
     return null;
   }
+}
+
+function parseStoredChatState(raw: string | null): StoredChatState | null {
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as StoredChatState;
+  } catch {
+    return null;
+  }
+}
+
+function isChatNotification(notification: AppNotification) {
+  const title = notification.title.toLowerCase();
+  return title.includes('message') || title.includes('order') || title.includes('chat');
+}
+
+const INITIAL_NOTIFICATIONS: AppNotification[] = [];
+
+function removeDeletedSeedData(state: StoredChatState | null): StoredChatState | null {
+  if (!state) return null;
+  return state;
+}
+
+/** Merges two message arrays by id so a concurrent write from another device can't discard either side's messages. */
+function mergeMessages(local: ChatMessage[], remote: ChatMessage[]): ChatMessage[] {
+  const byId = new Map<number, ChatMessage>();
+  remote.forEach((m) => byId.set(m.id, m));
+  local.forEach((m) => byId.set(m.id, m));
+  return Array.from(byId.values()).sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Merges two thread arrays by id, unioning each shared thread's messages
+ * instead of a blind overwrite. Every device debounce-writes its ENTIRE local
+ * `threads` snapshot to Firebase; if two devices write around the same time,
+ * whichever write lands last used to silently erase whatever message the
+ * other device had just added (the "I send a message but it's not stored"
+ * bug) since there was no merge, only last-write-wins.
+ */
+function mergeThreads(local: ChatThread[], remote: ChatThread[]): ChatThread[] {
+  const byId = new Map<string, ChatThread>();
+  remote.forEach((t) => byId.set(t.id, t));
+  local.forEach((t) => {
+    const existing = byId.get(t.id);
+    byId.set(t.id, existing
+      ? { ...existing, ...t, messages: mergeMessages(t.messages, existing.messages) }
+      : t);
+  });
+  return Array.from(byId.values());
+}
+
+/** Merges two notification arrays by id for the same reason as mergeThreads. */
+function mergeNotifications(local: AppNotification[], remote: AppNotification[]): AppNotification[] {
+  const byId = new Map<number, AppNotification>();
+  remote.forEach((n) => byId.set(n.id, n));
+  local.forEach((n) => byId.set(n.id, n));
+  return Array.from(byId.values()).sort((a, b) => b.id - a.id);
 }
 
 /** Strips undefined properties so Firebase Realtime Database set() never rejects */
@@ -272,7 +384,7 @@ function sanitizeForFirebase<T>(data: T): T {
 
 export function ChatNotificationProvider({ children }: { children: React.ReactNode }) {
   const { user: currentUser } = useAuth();
-  const storedState = loadStoredChatState();
+  const storedState = removeDeletedSeedData(loadStoredChatState());
   const [threads, setThreads] = useState<ChatThread[]>(storedState ? parseThreadsFromState(storedState.threads) : INITIAL_THREADS);
   const [orders, setOrders] = useState<Order[]>(storedState ? readOrders(storedState) : INITIAL_ORDERS);
   const [users, setUsers] = useState<User[]>(storedState?.users ? parseUsersFromState(storedState.users) : MOCK_USERS);
@@ -280,30 +392,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
   const [notifCounter, setNotifCounter] = useState(storedState?.notifCounter ?? 9000);
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(getPushPermissionState());
   const clientIdRef = useRef(`chat-client-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const lastSerializedStateRef = useRef('');
+  const isFirstSyncRunRef = useRef(true);
   const channelRef = useRef<BroadcastChannel | null>(null);
-
-  // ─── Deduplication State to Ensure Strict 1 Notification Per Message ─────
-  const notifiedMessageIdsRef = useRef<Set<string | number>>(new Set());
-  const initialMessageSyncDoneRef = useRef<boolean>(false);
-
-  const isMessageAlreadyNotified = useCallback((id: number | string): boolean => {
-    if (notifiedMessageIdsRef.current.has(id)) return true;
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage.getItem(`dj_notif_${id}`)) {
-        return true;
-      }
-    } catch {}
-    return false;
-  }, []);
-
-  const markMessageAsNotified = useCallback((id: number | string): void => {
-    notifiedMessageIdsRef.current.add(id);
-    try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(`dj_notif_${id}`, '1');
-      }
-    } catch {}
-  }, []);
+  const knownMessageIdsRef = useRef<Set<number>>(new Set());
+  const isInitialSyncRef = useRef<boolean>(true);
+  // Always-fresh ref so Firebase onValue closures never read stale currentUser
+  const currentUserRef = useRef(currentUser);
 
   // ─── Automated PWA App Icon Badging & Tab Title Synchronization ──────────
   useEffect(() => {
@@ -313,7 +408,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     const unreadNotifications = notifications.filter((n) => {
       if (n.read) return false;
       if (n.role !== currentRole) return false;
-      if (currentRole === 'customer' && currentCustId && n.userId && n.userId !== currentCustId) return false;
+      if (currentRole === 'customer' && currentCustId && !isMatchingUserId(n.userId, currentUser, users)) return false;
+      if (currentRole === 'designer' && currentCustId && !isMatchingUserId(n.userId, currentUser, users)) return false;
       return true;
     }).length;
 
@@ -322,7 +418,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       unreadMessages = threads.reduce((acc, t) => acc + (t.unread || 0), 0);
     } else if (currentRole === 'customer') {
       unreadMessages = threads
-        .filter((t) => !currentCustId || t.customerId === currentCustId || t.id === `customer-${currentCustId}` || t.id === `order-${currentCustId}`)
+        .filter((t) => !currentCustId || isMatchingUserId(t.customerId, currentUser, users) || t.id.includes(currentCustId))
         .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
     } else if (currentRole === 'designer') {
       unreadMessages = threads
@@ -330,9 +426,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         .reduce((acc, t) => acc + (t.customerUnread || 0), 0);
     }
 
-    const totalUnread = unreadNotifications + unreadMessages;
+    // Unread count: use unread notifications as primary counter
+    const totalUnread = unreadNotifications;
     setAppBadge(totalUnread);
 
+    // Sync browser document title: (3) Dream Jewels
     try {
       const baseTitle = 'Dream Jewels';
       if (totalUnread > 0) {
@@ -340,8 +438,11 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       } else if (document.title.startsWith('(')) {
         document.title = baseTitle;
       }
-    } catch { }
+    } catch {}
   }, [notifications, threads, currentUser?.role, currentUser?.id]);
+
+  // Keep currentUserRef in sync every render so Firebase closures read fresh data
+  currentUserRef.current = currentUser;
 
   // ─── Automatic FCM Token Session Sync (Once Per User Session) ───────────────
   const hasSyncedFcmTokenRef = useRef<string | null>(null);
@@ -367,27 +468,28 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const body = payload.notification?.body || payload.data?.body || 'You have a new update.';
       const pushType = payload.data?.type;
 
+      // A takeover notice isn't role-scoped (it's account-specific, and the
+      // realtime session listener has usually already logged this device out
+      // by the time the push round-trips) — just surface the banner/chime.
       if (pushType === 'session-takeover') {
-        showLocalNotification(title, { body, tag: 'session-takeover' });
+        showLocalNotification(title, { body });
         return;
       }
 
       if (pushType === 'chat-message') {
-        const messageId = payload.data?.messageId;
-        if (messageId && isMessageAlreadyNotified(messageId)) {
-          // Strict deduplication: already displayed via RTDB listener or previous push
-          return;
-        }
-        if (messageId) {
-          markMessageAsNotified(messageId);
-        }
-
         const targetUserId = payload.data?.userId || undefined;
         const senderId = payload.data?.senderId || undefined;
         const role =
           (payload.data?.role as 'customer' | 'admin' | 'designer' | undefined) ||
           (targetUserId ? 'customer' : 'admin');
 
+        // The browser's FCM registration token is shared across every open tab
+        // of this origin (it's tied to the Service Worker, not to whichever
+        // account happens to be logged into a given tab's sessionStorage). So a
+        // push addressed to the receiver's token can still fire this listener
+        // inside the SENDER's own tab if both accounts are open in the same
+        // browser. Cross-check against the user actually logged into THIS tab
+        // before surfacing anything, and never show the sender their own message.
         const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
         const currentUserIdLower = (currentUser?.id || '').toLowerCase();
         const currentUsernameLower = (currentUser?.username || '').toLowerCase();
@@ -396,12 +498,12 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
         const isForThisUser = targetUserId
           ? (
-            currentUserIdLower === targetLower ||
-            currentUsernameLower === targetLower ||
-            currentEmailLower === targetLower ||
-            (targetLower.startsWith('customer-') && (targetLower.includes(currentUserIdLower) || targetLower.includes(currentUsernameLower))) ||
-            myRole === role
-          )
+              currentUserIdLower === targetLower ||
+              currentUsernameLower === targetLower ||
+              currentEmailLower === targetLower ||
+              (targetLower.startsWith('customer-') && (targetLower.includes(currentUserIdLower) || targetLower.includes(currentUsernameLower))) ||
+              myRole === role
+            )
           : myRole === role;
 
         const senderLower = (senderId || '').toLowerCase();
@@ -411,17 +513,20 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           senderLower === currentEmailLower
         );
 
+        console.log('[ChatPush][foreground]', {
+          senderId,
+          targetUserId,
+          targetRole: role,
+          currentUserId: currentUser?.id,
+          currentUserRole: myRole,
+          isForThisUser,
+          isFromThisUser,
+        });
+
         if (!isForThisUser || isFromThisUser) return;
 
-        showLocalNotification(title, {
-          body,
-          tag: messageId ? `chat-msg-${messageId}` : undefined,
-          data: {
-            url: payload.data?.url,
-            threadId: payload.data?.threadId,
-            messageId,
-          }
-        });
+        // Surface banner/chime immediately for this user
+        showLocalNotification(title, { body });
         return;
       }
 
@@ -436,13 +541,14 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
 
     return () => unsub();
-  }, [currentUser?.id, currentUser?.role, isMessageAlreadyNotified, markMessageAsNotified]);
+  }, [currentUser?.id, currentUser?.role, currentUser?.username, currentUser?.email]);
 
   const enablePushNotifications = useCallback(async (userId?: string) => {
-    const res = await requestPushPermission(userId);
+    const targetUserId = userId || currentUser?.id;
+    const res = await requestPushPermission(targetUserId);
     setPushPermission(getPushPermissionState());
     return res;
-  }, []);
+  }, [currentUser?.id]);
 
   const addNotification = useCallback((n: Omit<AppNotification, 'id'> | Array<Omit<AppNotification, 'id'>>) => {
     const items = Array.isArray(n) ? n : [n];
@@ -451,19 +557,20 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         ...item,
         id: Date.now() + idx + Math.floor(Math.random() * 100),
       }));
-      const updated = [...newItems, ...prev];
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/notifications'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
+      return [...newItems, ...prev];
     });
     setNotifCounter((c) => c + items.length);
 
+    // Trigger local desktop banner & Web Audio sound — but only for the item
+    // actually addressed to whoever is logged into THIS tab. addNotification
+    // is called by the sender's own code (e.g. sendAdminMessage queues a
+    // 'customer'-role entry for the recipient) so without this check the
+    // sender's own browser would pop a banner meant for the other party.
     try {
       const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
       const relevant = items.find((item) => {
         if (item.role !== myRole) return false;
-        if (item.userId && currentUser?.id && item.userId !== currentUser.id) return false;
+        if (item.userId && currentUser && !isMatchingUserId(item.userId, currentUser, users)) return false;
         return true;
       });
       if (relevant) {
@@ -498,32 +605,89 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     return null;
   };
 
-  // ─── Firebase Realtime Database Stream Listeners ──────────────────────────
+  const applyChatState = useCallback((stored: StoredChatState) => {
+    const parsedOrders = parseOrdersFromState(stored.orders ?? stored.projects);
+    const parsedThreads = parseThreadsFromState(stored.threads);
+    const parsedUsers = stored.users ? parseUsersFromState(stored.users) : MOCK_USERS;
+    const parsedNotifs = parseNotificationsFromState(stored.notifications);
+
+    setThreads(parsedThreads);
+    setOrders(parsedOrders);
+    setUsers(parsedUsers);
+    setNotifications(parsedNotifs);
+    if (typeof stored.notifCounter === 'number') {
+      setNotifCounter(stored.notifCounter);
+    }
+
+    const clean = sanitizeForFirebase({
+      threads: parsedThreads,
+      orders: parsedOrders,
+      users: parsedUsers,
+      notifications: parsedNotifs,
+      notifCounter: stored.notifCounter ?? 9000,
+    });
+    const serialized = JSON.stringify(clean);
+    lastSerializedStateRef.current = serialized;
+    try {
+      window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const applyStoredState = useCallback((raw: string | null) => {
+    const stored = parseStoredChatState(raw);
+    if (!stored) return;
+    applyChatState(stored);
+  }, [applyChatState]);
+
+  // ─── Firebase Realtime Database 3-Node Listener ───────────────────────────────
   useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === CHAT_STORAGE_KEY) {
+        applyStoredState(event.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+
     if ('BroadcastChannel' in window) {
       const channel = new BroadcastChannel(CHAT_CHANNEL_NAME);
       channelRef.current = channel;
+      channel.onmessage = (event: MessageEvent<{ source: string; state: string }>) => {
+        if (event.data?.source !== clientIdRef.current) {
+          applyStoredState(event.data.state);
+        }
+      };
     }
 
     const unsubs: Array<() => void> = [];
 
     if (firebaseDatabase) {
-      // 1. Orders Node Listener (/orders)
+      // 1. Orders Node Listener (/orders) - Single source of truth for orders
       const ordersRef = ref(firebaseDatabase, 'orders');
       const unsubOrders = onValue(ordersRef, (snapshot) => {
         const val = snapshot.val();
         if (val) {
           const parsed = parseOrdersFromState(val);
-          setOrders((prev) => {
-            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
-            const newStr = JSON.stringify(sanitizeForFirebase(parsed));
-            return prevStr === newStr ? prev : parsed;
-          });
+          if (parsed.length > 0) {
+            setOrders((prev) => {
+              const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+              const newStr = JSON.stringify(sanitizeForFirebase(parsed));
+              return prevStr === newStr ? prev : parsed;
+            });
+          } else {
+            set(ordersRef, sanitizeForFirebase(INITIAL_ORDERS)).catch(() => {});
+            setOrders(INITIAL_ORDERS);
+          }
+        } else {
+          set(ordersRef, sanitizeForFirebase(INITIAL_ORDERS)).catch(() => {});
+          setOrders(INITIAL_ORDERS);
         }
       }, (err) => console.warn('Firebase RTDB orders sync:', err.message));
       unsubs.push(unsubOrders);
 
-      // 2. Users Node Listener (/users)
+      // 2. Users Node Listener (/users) - Single source of truth for users
       const usersRef = ref(firebaseDatabase, 'users');
       const unsubUsers = onValue(usersRef, (snapshot) => {
         const val = snapshot.val();
@@ -534,125 +698,233 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
             const newStr = JSON.stringify(sanitizeForFirebase(parsed));
             return prevStr === newStr ? prev : parsed;
           });
+        } else {
+          try {
+            set(usersRef, sanitizeForFirebase(MOCK_USERS));
+          } catch {
+            // ignore
+          }
         }
       }, (err) => console.warn('Firebase RTDB users sync:', err.message));
       unsubs.push(unsubUsers);
 
-      // 3. Threads Node Listener (/chatState/threads)
-      const threadsRef = ref(firebaseDatabase, 'chatState/threads');
-      const unsubThreads = onValue(threadsRef, (snapshot) => {
-        const val = snapshot.val();
-        if (val) {
-          const parsedThreads = parseThreadsFromState(val);
+      // 3. Chats / Notifications Listener (/chatState)
+      const chatStateRef = ref(firebaseDatabase, 'chatState');
+      const unsubChat = onValue(chatStateRef, (snapshot) => {
+        const value = snapshot.val() as StoredChatState | null;
+        if (value) {
+          const parsedThreads = parseThreadsFromState(value.threads);
+          const parsedNotifs = parseNotificationsFromState(value.notifications);
+          
+          if (parsedThreads.length > 0) {
+            const allIncomingMsgs = parsedThreads.flatMap((t) =>
+              (t.messages || []).map((m) => ({ ...m, threadId: t.id, thread: t }))
+            );
 
-          // Real-time message detection & single-fire notification for receiver
-          if (initialMessageSyncDoneRef.current) {
-            parsedThreads.forEach((thread) => {
-              (thread.messages || []).forEach((msg) => {
-                if (isMessageAlreadyNotified(msg.id)) return;
+            if (!isInitialSyncRef.current) {
+              // Always read from ref so closure never uses a stale currentUser
+              const liveUser = currentUserRef.current;
+              const currentRole = liveUser?.role === 'super-admin' ? 'admin' : (liveUser?.role || 'admin');
+              const currentUserId = (liveUser?.id || '').toLowerCase();
+              const currentUsername = (liveUser?.username || '').toLowerCase();
 
-                const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
-                const myId = (currentUser?.id || '').toLowerCase();
-                const myName = (currentUser?.name || '').toLowerCase();
-                const myEmail = (currentUser?.email || '').toLowerCase();
-                const threadCustId = (thread.customerId || '').toLowerCase();
-                const threadCustName = (thread.customerName || '').toLowerCase();
-
-                let isForMe = false;
-                if (myRole === 'admin') {
-                  isForMe = msg.from === 'customer' || msg.from === 'designer';
-                } else if (myRole === 'customer') {
-                  const isCustomerMatch =
-                    !myId ||
-                    threadCustId === myId ||
-                    (myEmail && threadCustId === myEmail) ||
-                    (myName && threadCustName === myName) ||
-                    thread.id === `customer-${currentUser?.id}` ||
-                    (currentUser?.id && thread.id.includes(currentUser.id));
-
-                  isForMe = (msg.from === 'admin' || msg.from === 'designer') && isCustomerMatch;
-                } else if (myRole === 'designer') {
-                  isForMe = msg.from === 'admin' &&
-                    (!myId || threadCustName === myId || (myName && threadCustName === myName) || (currentUser?.id && thread.id.includes(currentUser.id)));
-                }
-
-                markMessageAsNotified(msg.id);
-
-                if (isForMe) {
-                  const notifTitle = msg.senderName || (myRole === 'customer' ? 'Dream Jewels Support' : 'Customer Message');
-                  const previewText = msg.text || (msg.attachments && msg.attachments.length > 0 ? 'Sent an attachment' : 'New message');
-                  const targetUrl = myRole === 'admin'
-                    ? `/dashboard/admin/chats?thread=${encodeURIComponent(thread.id)}`
-                    : `/dashboard/customer/chat?thread=${encodeURIComponent(thread.id)}`;
-
-                  showLocalNotification(notifTitle, {
-                    body: previewText,
-                    tag: `chat-msg-${msg.id}`,
-                    data: {
-                      threadId: thread.id,
-                      messageId: msg.id,
-                      url: targetUrl,
-                    },
-                  });
-                }
+              const brandNew = allIncomingMsgs.filter((m) => {
+                if (knownMessageIdsRef.current.has(m.id)) return false;
+                // Never show a notification for the user's own messages
+                if (m.from === currentRole) return false;
+                // Extra check: filter by senderId field when available
+                const senderIdLower = (m as any).senderId
+                  ? String((m as any).senderId).toLowerCase()
+                  : '';
+                if (senderIdLower && (senderIdLower === currentUserId || senderIdLower === currentUsername)) return false;
+                return true;
               });
+
+              if (brandNew.length > 0) {
+                const relevant = brandNew.filter((m) => {
+                  if (currentRole === 'admin') return true;
+                  if (currentRole === 'customer') {
+                    return (
+                      isMatchingUserId(m.thread.customerId, liveUser, users) ||
+                      m.thread.customerName?.toLowerCase() === liveUser?.name?.toLowerCase() ||
+                      m.thread.id.includes(liveUser?.id || '') ||
+                      m.thread.id.includes(liveUser?.username || '')
+                    );
+                  }
+                  return false;
+                });
+
+                if (relevant.length > 0) {
+                  const latest = relevant[relevant.length - 1];
+                  playNotificationSound();
+                  if (typeof document !== 'undefined' && document.hidden) {
+                    showLocalNotification(latest.senderName || 'Dream Jewels Support', {
+                      body: latest.text ? (latest.text.length > 80 ? latest.text.slice(0, 80) + '…' : latest.text) : 'New message received',
+                      silent: true,
+                      tag: `chat-${latest.threadId}`,
+                    });
+                  }
+                }
+              }
+            } else {
+              isInitialSyncRef.current = false;
+            }
+
+            allIncomingMsgs.forEach((m) => knownMessageIdsRef.current.add(m.id));
+
+            setThreads((prev) => {
+              const prevStr = JSON.stringify(sanitizeForFirebase(prev));
+              const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
+              return prevStr === newStr ? prev : parsedThreads;
             });
-          } else {
-            // First database snapshot: register existing message IDs without alerting
-            parsedThreads.forEach((thread) => {
-              (thread.messages || []).forEach((msg) => {
-                markMessageAsNotified(msg.id);
-              });
-            });
-            initialMessageSyncDoneRef.current = true;
           }
 
-          setThreads((prev) => {
-            const prevStr = JSON.stringify(sanitizeForFirebase(prev));
-            const newStr = JSON.stringify(sanitizeForFirebase(parsedThreads));
-            return prevStr === newStr ? prev : parsedThreads;
-          });
-        }
-      }, (err) => console.warn('Firebase RTDB threads sync:', err.message));
-      unsubs.push(unsubThreads);
-
-      // 4. Notifications Node Listener (/chatState/notifications)
-      const notifsRef = ref(firebaseDatabase, 'chatState/notifications');
-      const unsubNotifs = onValue(notifsRef, (snapshot) => {
-        const val = snapshot.val();
-        if (val) {
-          const parsedNotifs = parseNotificationsFromState(val);
           setNotifications((prev) => {
             const prevStr = JSON.stringify(sanitizeForFirebase(prev));
             const newStr = JSON.stringify(sanitizeForFirebase(parsedNotifs));
             return prevStr === newStr ? prev : parsedNotifs;
           });
+
+          if (typeof value.notifCounter === 'number') {
+            setNotifCounter((prev) => (prev === value.notifCounter ? prev : value.notifCounter!));
+          }
+
+          // Mark incoming snapshot as serialized so useEffect does not echo-write back
+          lastSerializedStateRef.current = JSON.stringify(sanitizeForFirebase({
+            threads: parsedThreads,
+            orders,
+            users,
+            notifications: parsedNotifs,
+            notifCounter: typeof value.notifCounter === 'number' ? value.notifCounter : notifCounter,
+          }));
         }
-      }, (err) => console.warn('Firebase RTDB notifications sync:', err.message));
-      unsubs.push(unsubNotifs);
+      }, (err) => console.warn('Firebase RTDB chatState sync:', err.message));
+      unsubs.push(unsubChat);
     }
 
     return () => {
+      window.removeEventListener('storage', handleStorage);
       channelRef.current?.close();
       channelRef.current = null;
       unsubs.forEach((unsub) => unsub());
     };
-  }, []);
+  }, [applyStoredState]);
 
-  // ─── Local state persistence ───────────────────────────────────────────────
-  useEffect(() => {
+  // Direct persistence helper for instant, reliable database saving
+  const persistChatStateNow = useCallback(async (
+    nextThreads: ChatThread[],
+    nextNotifs: AppNotification[],
+    nextCounter?: number
+  ) => {
+    const counter = nextCounter ?? notifCounter;
+    const payload = sanitizeForFirebase({
+      threads: nextThreads,
+      orders,
+      users,
+      notifications: nextNotifs,
+      notifCounter: counter,
+    });
+    const serialized = JSON.stringify(payload);
+    lastSerializedStateRef.current = serialized;
+
     try {
-      const payload = sanitizeForFirebase({
-        threads,
-        orders,
-        users,
-        notifications,
-        notifCounter,
-      });
-      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-      // ignore
+      window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
+    } catch (e) {
+      console.warn('LocalStorage save failed:', e);
     }
+    channelRef.current?.postMessage({
+      source: clientIdRef.current,
+      state: serialized,
+    });
+
+    if (firebaseDatabase) {
+      try {
+        const chatStateRef = ref(firebaseDatabase, 'chatState');
+        const remoteSnap = await get(chatStateRef);
+        const remote = (remoteSnap.val() as StoredChatState) || {};
+        const remoteThreads = parseThreadsFromState(remote.threads);
+        const remoteNotifs = parseNotificationsFromState(remote.notifications);
+
+        const mergedThreads = mergeThreads(nextThreads, remoteThreads);
+        const mergedNotifs = mergeNotifications(nextNotifs, remoteNotifs);
+        const mergedCounter = Math.max(counter, remote.notifCounter ?? 0);
+
+        await set(chatStateRef, sanitizeForFirebase({
+          threads: mergedThreads,
+          notifications: mergedNotifs,
+          notifCounter: mergedCounter,
+        }));
+      } catch (err) {
+        console.error('Failed to save chat state directly to Firebase:', err);
+      }
+    }
+  }, [orders, users, notifCounter]);
+
+  // ─── Sync changes to Firebase & localStorage (Debounced & Deduplicated) ────────
+  useEffect(() => {
+    const payload = sanitizeForFirebase({
+      threads,
+      orders,
+      users,
+      notifications,
+      notifCounter,
+    });
+    const serialized = JSON.stringify(payload);
+    if (serialized === lastSerializedStateRef.current) return;
+
+    if (isFirstSyncRunRef.current) {
+      isFirstSyncRunRef.current = false;
+      lastSerializedStateRef.current = serialized;
+      return;
+    }
+
+    lastSerializedStateRef.current = serialized;
+
+    const timer = setTimeout(async () => {
+      try {
+        window.localStorage.setItem(CHAT_STORAGE_KEY, serialized);
+      } catch (e) {
+        console.warn('LocalStorage save failed:', e);
+      }
+      channelRef.current?.postMessage({
+        source: clientIdRef.current,
+        state: serialized,
+      });
+
+      if (firebaseDatabase) {
+        try {
+          set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(orders)).catch(() => {});
+          set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(users)).catch(() => {});
+
+          const chatStateRef = ref(firebaseDatabase, 'chatState');
+          const remoteSnap = await get(chatStateRef);
+          const remote = (remoteSnap.val() as StoredChatState) || {};
+          const remoteThreads = parseThreadsFromState(remote.threads);
+          const remoteNotifs = parseNotificationsFromState(remote.notifications);
+
+          const mergedThreads = mergeThreads(threads, remoteThreads);
+          const mergedNotifs = mergeNotifications(notifications, remoteNotifs);
+          const mergedCounter = Math.max(notifCounter, remote.notifCounter ?? 0);
+
+          await set(chatStateRef, sanitizeForFirebase({
+            threads: mergedThreads,
+            notifications: mergedNotifs,
+            notifCounter: mergedCounter,
+          }));
+
+          setThreads((prev) =>
+            JSON.stringify(sanitizeForFirebase(prev)) === JSON.stringify(sanitizeForFirebase(mergedThreads)) ? prev : mergedThreads
+          );
+          setNotifications((prev) =>
+            JSON.stringify(sanitizeForFirebase(prev)) === JSON.stringify(sanitizeForFirebase(mergedNotifs)) ? prev : mergedNotifs
+          );
+        } catch (e) {
+          console.error('Failed to save state to Firebase:', e);
+        }
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
   }, [threads, orders, users, notifications, notifCounter]);
 
   const ensureDesignerThread = useCallback((designerName: string, orderName?: string, designerId?: string) => {
@@ -668,6 +940,9 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const newThread: ChatThread = {
         id: threadId,
         customerName: designerName,
+        // Prefer the designer's real user ID (needed for push targeting via
+        // targetUserId) — falls back to the thread ID only when the caller
+        // doesn't have it yet, matching prior behavior.
         customerId: designerId || threadId,
         participantRole: 'designer',
         messages: [
@@ -686,23 +961,24 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         lastTime: 'Just now',
       };
 
-      const updated = [newThread, ...prev];
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-
-      return updated;
+      return [newThread, ...prev];
     });
 
     return threadId;
   }, []);
 
+  // Order-wise chat threads used to only get created via createThreadForOrder
+  // (the customer's own "request custom order" flow). Orders an admin adds
+  // manually never went through that path, so their thread was missing —
+  // sendAdminMessage would silently drop the first message because there was
+  // no matching thread to append it to. Call this before opening/navigating
+  // to an order's chat so the thread (and its Conversations list entry)
+  // always exists first.
   const ensureThreadForOrder = useCallback((order: Order) => {
     const threadId = `order-${order.id}`;
 
     setThreads((prev) => {
-      const existing = prev.find((t) => t.id === threadId);
-      if (existing) return prev;
+      if (prev.some((t) => t.id === threadId)) return prev;
 
       const newThread: ChatThread = {
         id: threadId,
@@ -718,12 +994,14 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         lastTime: '',
       };
 
-      const updated = [newThread, ...prev];
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-
-      return updated;
+      // Deliberately NOT writing to Firebase directly here. `prev` is this
+      // tab's local state, which may not have hydrated from Firebase yet
+      // (e.g. right after a fresh page load) — an immediate set() at that
+      // point would overwrite the real chatState/threads node with a
+      // snapshot that's missing this order's actual message history. The
+      // debounced sync effect below persists this the same way every other
+      // thread mutation does, but only once hydration has been confirmed.
+      return [newThread, ...prev];
     });
 
     return threadId;
@@ -773,10 +1051,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         `💍 Category   : ${order.category}`,
         `⚙️  Metal      : ${order.metal} (${order.karat})`,
       ];
-      if (order.size) lines.push(`📏 Size       : No. ${order.size}`);
-      if (order.weight) lines.push(`⚖️  Weight     : ${order.weight}`);
+      if (order.size)         lines.push(`📏 Size       : No. ${order.size}`);
+      if (order.weight)       lines.push(`⚖️  Weight     : ${order.weight}`);
       if (order.deliveryDate) lines.push(`📅 Target Date: ${order.deliveryDate}`);
-      if (order.notes) lines.push(`📝 Notes      : ${order.notes}`);
+      if (order.notes)        lines.push(`📝 Notes      : ${order.notes}`);
       if (orderAttachments.length > 0) lines.push(`📎 Files      : ${orderAttachments.length} file(s) attached`);
       lines.push(`──────────────────────────`);
       lines.push(`🔖 Status     : In Design`);
@@ -791,27 +1069,25 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         seenBy: [],
       };
 
-      const threadId = `order-${orderId}`;
-      const newThread: ChatThread = {
-        id: threadId,
-        orderId,
-        orderName,
-        customerName,
-        customerId,
-        participantRole: 'customer',
-        messages: [greetMsg, detailMsg],
-        unread: 1,           // admin has unread order details
-        customerUnread: 1,   // customer gets greeting
-        lastMessage: `New order: ${orderName}`,
-        lastTime: 'Just now',
-      };
-
       setThreads((prev) => {
-        const updated = [newThread, ...prev.filter((t) => t.id !== threadId)];
-        if (firebaseDatabase) {
-          set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-        }
-        return updated;
+        const threadId = `order-${orderId}`;
+        const newThread: ChatThread = {
+          id: threadId,
+          orderId,
+          orderName,
+          customerName,
+          customerId,
+          participantRole: 'customer',
+          messages: [greetMsg, detailMsg],
+          unread: 1,           // admin has unread order details
+          customerUnread: 1,   // customer gets greeting
+          lastMessage: `New order: ${orderName}`,
+          lastTime: 'Just now',
+        };
+        // Same reasoning as ensureThreadForOrder: let the debounced sync
+        // effect persist this once hydration is confirmed, rather than
+        // writing `prev` (possibly stale local state) straight to Firebase.
+        return [newThread, ...prev.filter((t) => t.id !== threadId)];
       });
 
       const newOrder: Order = {
@@ -845,7 +1121,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       setOrders((prev) => {
         const updated = [newOrder, ...prev.filter((order) => order.id !== orderId)];
         if (firebaseDatabase) {
-          set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => { });
+          set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
         }
         return updated;
       });
@@ -867,7 +1143,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           body: 'Your custom order has been received. Check your chat for updates.',
           time: 'Just now',
           read: false,
-          type: 'order',
+          type: 'chat',
+          threadId: `order-${orderId}`,
           orderId: orderId,
         }
       ]);
@@ -884,7 +1161,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         : [order, ...current];
 
       if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => { });
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
       }
 
       if (existing) {
@@ -897,6 +1174,10 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           const andText = statusChanged && progressChanged ? ' and ' : '';
           const changeDesc = `${statusText}${andText}${progressText}`;
 
+          // Only notify the customer about their order being updated.
+          // Skip the admin self-notification entirely when admin/super-admin is
+          // the one making the change — they already see the update on screen.
+          // Only add admin notification when a designer (non-admin) actor made the change.
           const actorRole = currentUser?.role;
           const isAdminActor = actorRole === 'admin' || actorRole === 'super-admin';
 
@@ -933,6 +1214,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     });
   }, [addNotification, currentUser?.role]);
 
+  // Approval only flips the status.
   const approveOrder = useCallback((orderId: string) => {
     setOrders((current) => {
       const order = current.find((item) => item.id === orderId);
@@ -943,7 +1225,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       );
 
       if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => { });
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
       }
 
       addNotification({
@@ -965,7 +1247,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setOrders((current) => {
       const updated = current.filter((item) => item.id !== orderId);
       if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => { });
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
       }
       return updated;
     });
@@ -987,7 +1269,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       );
 
       if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => { });
+        set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(updated)).catch(() => {});
       }
 
       addNotification({
@@ -1015,11 +1297,8 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       optionalThreadId?: string,
       attachments?: ChatAttachment[]
     ) => {
-      const msgId = newMessageId();
-      markMessageAsNotified(msgId);
-
       const msg: ChatMessage = {
-        id: msgId,
+        id: newMessageId(),
         from: 'customer',
         senderName: customerName,
         text,
@@ -1028,30 +1307,34 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         seenBy: [],
       };
 
+      // Pre-register ID so Firebase echo won't re-trigger a notification for the sender
+      knownMessageIdsRef.current.add(msg.id);
+
       const targetThreadId = optionalThreadId || `customer-${customerId}`;
 
+      let nextThreads: ChatThread[] = [];
       setThreads((prev) => {
         const existing = prev.find((t) => t.id === targetThreadId);
-        let updated: ChatThread[];
 
         if (existing) {
-          const updatedThread: ChatThread = {
-            ...existing,
-            customerId,
-            customerName,
-            messages: [...existing.messages, msg],
-            unread: (existing.unread || 0) + 1,
-            lastMessage: formatLastMessage(text, attachments),
-            lastTime: 'Just now',
-          };
-          updated = prev.map((t) => (t.id === existing.id ? updatedThread : t));
+          nextThreads = prev.map((t) =>
+            t.id === existing.id
+              ? {
+                  ...t,
+                  customerId,
+                  customerName,
+                  messages: [...t.messages, msg],
+                  unread: (t.unread || 0) + 1,
+                  lastMessage: formatLastMessage(text, attachments),
+                  lastTime: 'Just now',
+                }
+              : t
+          );
         } else {
           const initialMessages: ChatMessage[] = [];
           if (targetThreadId === `customer-${customerId}`) {
-            const welcomeId = Date.now() - 1000;
-            markMessageAsNotified(welcomeId);
             initialMessages.push({
-              id: welcomeId,
+              id: Date.now() - 1000,
               from: 'admin',
               senderName: 'Dream Jewels Support',
               text: `👋 Welcome to Dream Jewels, ${customerName}! How can our master jewelers assist you today?`,
@@ -1072,25 +1355,37 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
             lastMessage: formatLastMessage(text, attachments),
             lastTime: 'Just now',
           };
-          updated = [newThread, ...prev];
+          nextThreads = [newThread, ...prev];
         }
-
-        if (firebaseDatabase) {
-          set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch((err) => {
-            console.warn('Firebase error sending customer message:', err);
-          });
-        }
-
-        return updated;
+        return nextThreads;
       });
 
       const notifTitle = `New message from ${customerName}`;
-      const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : (text || (attachments && attachments.length > 0 ? 'Sent attachment' : 'New message'));
-      const badgeCount = threads.reduce((sum, t) => sum + (t.unread || 0), 0) + 1;
+      const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
 
+      const newNotifItem: AppNotification = {
+        id: Date.now() + Math.floor(Math.random() * 100),
+        role: 'admin',
+        title: notifTitle,
+        body: notifBody,
+        time: 'Just now',
+        read: false,
+        type: 'chat',
+        threadId: targetThreadId,
+      };
+
+      setNotifications((prev) => [newNotifItem, ...prev]);
+      setNotifCounter((c) => c + 1);
+
+      // Persist directly to Firebase RTDB and localStorage
+      persistChatStateNow(
+        nextThreads.length > 0 ? nextThreads : threads,
+        [newNotifItem, ...notifications]
+      );
+
+      const badgeCount = notifications.filter((n) => n.role === 'admin' && !n.read).length + 1;
       sendChatPushNotification({
         senderId: currentUser?.id || customerId,
-        messageId: msgId,
         targetRole: 'admin',
         title: notifTitle,
         body: notifBody,
@@ -1098,15 +1393,12 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount,
       });
     },
-    [threads, currentUser?.id, markMessageAsNotified]
+    [threads, notifications, currentUser?.id, persistChatStateNow]
   );
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
-    const msgId = newMessageId();
-    markMessageAsNotified(msgId);
-
     const msg: ChatMessage = {
-      id: msgId,
+      id: newMessageId(),
       from: 'designer',
       senderName: designerName,
       text,
@@ -1114,50 +1406,55 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       seenBy: [],
     };
 
+    // Pre-register ID so Firebase echo won't re-trigger a notification for the sender
+    knownMessageIdsRef.current.add(msg.id);
+
+    let nextThreads: ChatThread[] = [];
     setThreads((prev) => {
-      const updated = prev.map((t) => {
-        if (t.id === threadId) {
-          return {
-            ...t,
-            messages: [...t.messages, msg],
-            unread: (t.unread || 0) + 1,
-            lastMessage: text,
-            lastTime: 'Just now',
-          };
-        }
-        return t;
-      });
-
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch((err) => {
-          console.warn('Firebase error sending designer message:', err);
-        });
-      }
-
-      return updated;
+      nextThreads = prev.map((t) =>
+        t.id === threadId
+          ? { ...t, messages: [...t.messages, msg], unread: t.unread + 1, lastMessage: text, lastTime: 'Just now' }
+          : t
+      );
+      return nextThreads;
     });
 
     const notifTitle = `New message from Designer (${designerName})`;
     const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
-    const badgeCount = threads.reduce((sum, t) => sum + (t.unread || 0), 0) + 1;
 
+    const newNotifItem: AppNotification = {
+      id: Date.now() + Math.floor(Math.random() * 100),
+      role: 'admin',
+      title: notifTitle,
+      body: notifBody,
+      time: 'Just now',
+      read: false,
+      type: 'chat',
+      threadId: threadId,
+    };
+
+    setNotifications((prev) => [newNotifItem, ...prev]);
+    setNotifCounter((c) => c + 1);
+
+    persistChatStateNow(
+      nextThreads.length > 0 ? nextThreads : threads,
+      [newNotifItem, ...notifications]
+    );
+
+    const badgeCount = notifications.filter((n) => n.role === 'admin' && !n.read).length + 1;
     sendChatPushNotification({
       senderId: currentUser?.id || threadId,
-      messageId: msgId,
       targetRole: 'admin',
       title: notifTitle,
       body: notifBody,
       threadId,
       badgeCount,
     });
-  }, [threads, currentUser?.id, markMessageAsNotified]);
+  }, [threads, notifications, currentUser?.id, persistChatStateNow]);
 
   const sendAdminMessage = useCallback((threadId: string, text: string, attachments: ChatAttachment[] = []) => {
-    const msgId = newMessageId();
-    markMessageAsNotified(msgId);
-
     const msg: ChatMessage = {
-      id: msgId,
+      id: newMessageId(),
       from: 'admin',
       senderName: 'Dream Jewels Support',
       text,
@@ -1166,35 +1463,33 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       seenBy: [],
     };
 
+    // Pre-register this message ID so the Firebase echo doesn't trigger a
+    // duplicate notification sound/banner for the sender's own message.
+    knownMessageIdsRef.current.add(msg.id);
+
+    let nextThreads: ChatThread[] = [];
     setThreads((prev) => {
-      const updated = prev.map((t) => {
-        if (t.id === threadId) {
-          return {
-            ...t,
-            messages: [...t.messages, msg],
-            customerUnread: (t.customerUnread || 0) + 1,
-            lastMessage: formatLastMessage(text, attachments),
-            lastTime: 'Just now',
-          };
-        }
-        return t;
-      });
-
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch((err) => {
-          console.warn('Firebase error sending admin message:', err);
-        });
-      }
-
-      return updated;
+      nextThreads = prev.map((t) =>
+        t.id === threadId
+          ? {
+              ...t,
+              messages: [...t.messages, msg],
+              customerUnread: t.customerUnread + 1,
+              lastMessage: formatLastMessage(text, attachments),
+              lastTime: 'Just now',
+            }
+          : t
+      );
+      return nextThreads;
     });
 
     const thread = threads.find((t) => t.id === threadId);
     if (thread) {
       const recipientRole = thread.participantRole === 'designer' ? 'designer' : 'customer';
       const notifTitle = 'New message from Support';
-      const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : (text || (attachments && attachments.length > 0 ? 'Sent attachment' : 'New message'));
+      const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : text;
 
+      // Find user in users collection to resolve canonical user ID for push and notification routing
       const matchedUser = users.find(
         (u) =>
           (thread.customerId && (u.id === thread.customerId || u.username?.toLowerCase() === thread.customerId.toLowerCase())) ||
@@ -1203,136 +1498,124 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       const effectiveTargetUserId = matchedUser?.id || thread.customerId || (thread.id.startsWith('customer-') ? thread.id.replace('customer-', '') : '');
 
+      const newNotifItem: AppNotification = {
+        id: Date.now() + Math.floor(Math.random() * 100),
+        role: recipientRole,
+        userId: effectiveTargetUserId || thread.customerId,
+        title: notifTitle,
+        body: notifBody,
+        time: 'Just now',
+        read: false,
+        type: 'chat',
+        threadId: threadId,
+      };
+
+      setNotifications((prev) => [newNotifItem, ...prev]);
+      setNotifCounter((c) => c + 1);
+
+      persistChatStateNow(
+        nextThreads.length > 0 ? nextThreads : threads,
+        [newNotifItem, ...notifications]
+      );
+
+      const badgeCount =
+        notifications.filter((n) => n.role === recipientRole && (n.userId === effectiveTargetUserId || n.userId === thread.customerId) && !n.read).length + 1;
+
       sendChatPushNotification({
         senderId: currentUser?.id || 'admin',
-        messageId: msgId,
         targetUserId: effectiveTargetUserId || undefined,
         targetRole: recipientRole,
         title: notifTitle,
         body: notifBody,
         threadId,
-        badgeCount: (thread.customerUnread || 0) + 1,
+        badgeCount,
       });
     }
-  }, [threads, currentUser?.id, users, markMessageAsNotified]);
+  }, [threads, notifications, currentUser?.id, users, persistChatStateNow]);
 
   const markThreadRead = useCallback((threadId: string, as: 'admin' | 'customer' | 'designer') => {
-    setThreads((prev) => {
-      const target = prev.find((t) => t.id === threadId);
-      if (!target) return prev;
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId
+          ? {
+              ...t,
+              unread: as === 'admin' ? 0 : t.unread,
+              customerUnread: as === 'customer' || as === 'designer' ? 0 : t.customerUnread,
+              messages: t.messages.map((message) => {
+                if (getMessageAudienceRole(t, message) !== as) return message;
+                if (message.seenBy?.includes(as)) return message;
+                return { ...message, seenBy: [...(message.seenBy ?? []), as] };
+              }),
+            }
+          : t
+      )
+    );
 
-      const unreadCount = as === 'admin' ? target.unread : target.customerUnread;
-      if (unreadCount === 0) return prev;
-
-      const updated = prev.map((t) => {
-        if (t.id === threadId) {
-          return {
-            ...t,
-            unread: as === 'admin' ? 0 : t.unread,
-            customerUnread: as === 'customer' || as === 'designer' ? 0 : t.customerUnread,
-            messages: t.messages.map((message) => {
-              if (getMessageAudienceRole(t, message) !== as) return message;
-              if (message.seenBy?.includes(as)) return message;
-              return { ...message, seenBy: [...(message.seenBy ?? []), as] };
-            }),
-          };
-        }
-        return t;
-      });
-
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-
-      return updated;
-    });
-
-    setNotifications((prev) => {
-      const updated = prev.map((n) => {
+    // Mark chat notifications for this thread as read without deleting history
+    setNotifications((prev) =>
+      prev.map((n) => {
         if (n.role === as && n.type === 'chat' && (n.threadId === threadId || n.threadId?.includes(threadId))) {
           return { ...n, read: true };
         }
         return n;
-      });
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/notifications'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
-    });
+      })
+    );
   }, []);
 
   const markAllNotificationsRead = useCallback((role: 'customer' | 'admin' | 'designer', userId?: string) => {
-    setNotifications((prev) => {
-      const updated = prev.map((n) => {
+    setNotifications((prev) =>
+      prev.map((n) => {
         if (n.role !== role) return n;
-        if (role === 'customer' && userId && n.userId && n.userId !== userId) return n;
-        if (role === 'designer' && userId && n.userId && n.userId !== userId) return n;
+        if (role === 'customer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return n;
+        if (role === 'designer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return n;
         return { ...n, read: true };
-      });
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/notifications'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
-    });
-
-    setThreads((prev) => {
-      const updated = prev.map((thread) => {
+      })
+    );
+    setThreads((prev) =>
+      prev.map((thread) => {
         if (role === 'admin') {
           return { ...thread, unread: 0 };
         }
-        if (role === 'customer' && (!userId || thread.customerId === userId || thread.id === `customer-${userId}`)) {
+        if (role === 'customer' && (!userId || isMatchingUserId(thread.customerId, currentUser, users) || thread.id.includes(userId))) {
           return { ...thread, customerUnread: 0 };
         }
         if (role === 'designer' && (!userId || thread.customerName === userId || thread.id.includes(userId))) {
           return { ...thread, customerUnread: 0 };
         }
         return thread;
-      });
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
-    });
-  }, []);
+      })
+    );
+  }, [currentUser, users]);
 
   const markNotificationRead = useCallback((id: number) => {
-    setNotifications((prev) => {
-      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/notifications'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
-    });
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   }, []);
 
   const clearAllNotifications = useCallback((role?: 'customer' | 'admin' | 'designer', userId?: string) => {
-    setNotifications((prev) => {
-      let updated: AppNotification[] = [];
-      if (role) {
-        updated = prev.filter((n) => {
-          if (n.role !== role) return true;
-          if (role === 'customer' && userId && n.userId && n.userId !== userId) return true;
-          if (role === 'designer' && userId && n.userId && n.userId !== userId) return true;
-          return false;
-        });
-      }
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/notifications'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
-    });
-  }, []);
+    if (!role) {
+      setNotifications([]);
+      return;
+    }
+    setNotifications((prev) =>
+      prev.filter((n) => {
+        if (n.role !== role) return true;
+        if (role === 'customer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return true;
+        if (role === 'designer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return true;
+        return false;
+      })
+    );
+  }, [currentUser, users]);
 
   const getUnreadCount = useCallback(
     (role: 'customer' | 'admin' | 'designer', userId?: string) =>
       notifications.filter((n) => {
         if (n.read) return false;
         if (n.role !== role) return false;
-        if (role === 'customer' && userId && n.userId && n.userId !== userId) return false;
-        if (role === 'designer' && userId && n.userId && n.userId !== userId) return false;
+        if (role === 'customer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return false;
+        if (role === 'designer' && userId && !isMatchingUserId(n.userId, currentUser, users)) return false;
         return true;
       }).length,
-    [notifications]
+    [notifications, currentUser, users]
   );
 
   const getChatUnreadCount = useCallback(
@@ -1344,7 +1627,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       return threads
         .filter((thread) => {
           if (role === 'customer') {
-            if (userId) return thread.customerId === userId || thread.id === `customer-${userId}` || thread.id === `order-${userId}`;
+            if (userId) {
+              return (
+                isMatchingUserId(thread.customerId, currentUser, users) ||
+                thread.id.includes(userId) ||
+                thread.customerName?.toLowerCase() === currentUser?.name?.toLowerCase()
+              );
+            }
             return thread.participantRole === 'customer';
           }
           if (role === 'designer') {
@@ -1355,7 +1644,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         })
         .reduce((sum, thread) => sum + (thread.customerUnread || 0), 0);
     },
-    [threads]
+    [threads, currentUser, users]
   );
 
   const triggerTestNotification = useCallback(
@@ -1439,16 +1728,22 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           break;
       }
     },
-    [addNotification, currentUser?.role, currentUser?.id, currentUser?.name]
+    [addNotification]
   );
 
   const seedOrderTestChats = useCallback(() => {
     setOrders(INITIAL_ORDERS);
     setThreads(INITIAL_THREADS);
     if (firebaseDatabase) {
-      set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(INITIAL_ORDERS)).catch(() => { });
-      set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => { });
-      set(ref(firebaseDatabase, 'chatState/notifications'), sanitizeForFirebase([])).catch(() => { });
+      set(ref(firebaseDatabase, 'orders'), sanitizeForFirebase(INITIAL_ORDERS)).catch(() => {});
+      set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(INITIAL_THREADS)).catch(() => {});
+      set(ref(firebaseDatabase, 'chatState'), sanitizeForFirebase({
+        threads: INITIAL_THREADS,
+        orders: INITIAL_ORDERS,
+        users,
+        notifications,
+        notifCounter,
+      })).catch(() => {});
     }
     addNotification({
       role: 'admin',
@@ -1458,45 +1753,30 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       read: false,
       type: 'system',
     });
-  }, [addNotification]);
+  }, [users, notifications, notifCounter, addNotification]);
 
   const deleteMessage = useCallback((threadId: string, messageId: number) => {
-    setThreads((prev) => {
-      const updated = prev.map((t) => {
+    setThreads((prev) =>
+      prev.map((t) => {
         if (t.id !== threadId) return t;
         const filteredMessages = t.messages.filter((m) => m.id !== messageId);
-        const lastMsg = filteredMessages[filteredMessages.length - 1];
         return {
           ...t,
           messages: filteredMessages,
-          lastMessage: lastMsg ? formatLastMessage(lastMsg.text, lastMsg.attachments) : 'No messages',
-          lastTime: lastMsg ? lastMsg.time : '',
         };
-      });
-
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-
-      return updated;
-    });
+      })
+    );
   }, []);
 
   const deleteThread = useCallback((threadId: string) => {
-    setThreads((prev) => {
-      const updated = prev.filter((t) => t.id !== threadId);
-      if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'chatState/threads'), sanitizeForFirebase(updated)).catch(() => {});
-      }
-      return updated;
-    });
+    setThreads((prev) => prev.filter((t) => t.id !== threadId));
   }, []);
 
   const addUser = useCallback((newUser: User & { password?: string }) => {
     setUsers((prev) => {
       const updated = [newUser, ...prev.filter((u) => u.id !== newUser.id)];
       if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(updated)).catch(() => { });
+        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(updated)).catch(() => {});
       }
       return updated;
     });
@@ -1506,7 +1786,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     setUsers((prev) => {
       const updated = prev.filter((u) => u.id !== userId);
       if (firebaseDatabase) {
-        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(updated)).catch(() => { });
+        set(ref(firebaseDatabase, 'users'), sanitizeForFirebase(updated)).catch(() => {});
       }
       return updated;
     });
