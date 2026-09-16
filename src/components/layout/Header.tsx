@@ -9,7 +9,7 @@ import { Avatar } from '../common/Avatar';
 import { RoleBadge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { Breadcrumb } from './Breadcrumb';
-import { useChatNotification } from '../../context/ChatNotificationContext';
+import { useChatNotification, isMatchingUserId } from '../../context/ChatNotificationContext';
 
 
 interface HeaderProps {
@@ -21,6 +21,7 @@ function NotificationBell() {
   const [isEnabling, setIsEnabling] = useState(false);
   const {
     notifications,
+    users,
     markAllNotificationsRead,
     markNotificationRead,
     getUnreadCount,
@@ -37,8 +38,8 @@ function NotificationBell() {
   const notifRole = role === 'super-admin' ? 'admin' : (role as 'customer' | 'admin' | 'designer') ?? 'admin';
   const myNotifications = notifications.filter((n) => {
     if (n.role !== notifRole) return false;
-    if (notifRole === 'customer' && user?.id && n.userId && n.userId !== user.id) return false;
-    if (notifRole === 'designer' && user?.id && n.userId && n.userId !== user.id) return false;
+    if (notifRole === 'customer' && user?.id && n.userId && !isMatchingUserId(n.userId, user, users)) return false;
+    if (notifRole === 'designer' && user?.id && n.userId && !isMatchingUserId(n.userId, user, users)) return false;
     return true;
   });
 
