@@ -871,6 +871,16 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
           orderId: orderId,
         }
       ]);
+
+      // Fix 1: Also send FCM push so admin gets a device-level pop-up when app is closed/background
+      sendChatPushNotification({
+        senderId: customerId,
+        targetRole: 'admin',
+        title: `New order from ${customerName}`,
+        body: `"${orderName}" submitted for review.`,
+        orderId,
+        threadId,
+      });
     },
     [addNotification]
   );
@@ -1088,6 +1098,17 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
       const notifBody = text.length > 60 ? text.slice(0, 60) + '…' : (text || (attachments && attachments.length > 0 ? 'Sent attachment' : 'New message'));
       const badgeCount = threads.reduce((sum, t) => sum + (t.unread || 0), 0) + 1;
 
+      // Fix 2: Add an in-app AppNotification so the admin Notifications page bell shows chat messages
+      addNotification({
+        role: 'admin',
+        title: notifTitle,
+        body: notifBody,
+        time: 'Just now',
+        read: false,
+        type: 'chat',
+        threadId: targetThreadId,
+      });
+
       sendChatPushNotification({
         senderId: currentUser?.id || customerId,
         messageId: msgId,
@@ -1098,7 +1119,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount,
       });
     },
-    [threads, currentUser?.id, markMessageAsNotified]
+    [threads, currentUser?.id, markMessageAsNotified, addNotification]
   );
 
   const sendDesignerMessage = useCallback((threadId: string, designerName: string, text: string) => {
@@ -1203,6 +1224,18 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
 
       const effectiveTargetUserId = matchedUser?.id || thread.customerId || (thread.id.startsWith('customer-') ? thread.id.replace('customer-', '') : '');
 
+      // Fix 3: Add an in-app AppNotification so customer Notifications page bell shows admin messages
+      addNotification({
+        role: recipientRole,
+        userId: effectiveTargetUserId || thread.customerId || undefined,
+        title: notifTitle,
+        body: notifBody,
+        time: 'Just now',
+        read: false,
+        type: 'chat',
+        threadId,
+      });
+
       sendChatPushNotification({
         senderId: currentUser?.id || 'admin',
         messageId: msgId,
@@ -1214,7 +1247,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         badgeCount: (thread.customerUnread || 0) + 1,
       });
     }
-  }, [threads, currentUser?.id, users, markMessageAsNotified]);
+  }, [threads, currentUser?.id, users, markMessageAsNotified, addNotification]);
 
   const markThreadRead = useCallback((threadId: string, as: 'admin' | 'customer' | 'designer') => {
     setThreads((prev) => {
