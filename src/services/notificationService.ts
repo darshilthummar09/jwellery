@@ -156,6 +156,8 @@ export const requestPushPermission = async (userId?: string): Promise<{
       registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
         scope: '/firebase-cloud-messaging-push-scope',
       });
+    } else {
+      registration.update().catch(() => {});
     }
     await navigator.serviceWorker.ready;
 

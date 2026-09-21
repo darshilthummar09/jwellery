@@ -24,48 +24,79 @@ try {
   console.warn('Firebase messaging in service worker initialization error:', e);
 }
 
-// 1. Listen for background push events from FCM when app is completely closed
+// Service Worker Lifecycle: activate new version immediately
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+// 1. Listen for background push events from FCM when app is closed / in background
 if (messaging) {
   messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
+    const notificationTitle = payload.notification?.title || payload.data?.title || 'Dream Jewels';
+    const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new update.';
     const badgeCount = parseInt(payload.data?.badgeCount || payload.data?.unreadCount, 10);
-    const actions = [];
+    const targetUrl = payload.data?.url || payload.fcmOptions?.link || '/';
+
+    const msgTag = payload.data?.messageId 
+      ? `chat-msg-${payload.data.messageId}` 
+      : (payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification'));
+
+    const notificationOptions = {
+      body: notificationBody,
+      icon: '/pwa-192x192-v4.png',
+      badge: '/pwa-192x192-v4.png',
+      vibrate: [200, 100, 200],
+      tag: msgTag,
+      renotify: false,
+      data: {
+        url: targetUrl,
+        badgeCount: !isNaN(badgeCount) ? badgeCount : undefined
+      }
+    };
+
+    const actions = [
+      self.registration.showNotification(notificationTitle, notificationOptions)
+    ];
 
     // Set or update the app icon badge count on the device Home Screen
     if (!isNaN(badgeCount) && 'setAppBadge' in navigator) {
       actions.push(navigator.setAppBadge(badgeCount).catch(() => {}));
     }
 
-    // If the FCM message already contains a top-level notification object,
-    // the Firebase Web SDK automatically displays it using webpush.notification options.
-    // Calling self.registration.showNotification here would cause duplicate notifications.
-    if (!payload.notification) {
-      const notificationTitle = payload.data?.title || 'Dream Jewels';
-      const notificationBody = payload.data?.body || 'You have a new update.';
-      const targetUrl = payload.data?.url || '/';
-
-      const msgTag = payload.data?.messageId 
-        ? `chat-msg-${payload.data.messageId}` 
-        : (payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification'));
+    return Promise.all(actions);
+  });
+} else {
+  // Fallback in case firebase.messaging() could not initialize
+  self.addEventListener('push', (event) => {
+    if (!event.data) return;
+    try {
+      const data = event.data.json();
+      const notificationTitle = data.title || data.notification?.title || 'Dream Jewels';
+      const msgTag = data.messageId || data.data?.messageId
+        ? `chat-msg-${data.messageId || data.data?.messageId}`
+        : (data.tag || data.data?.tag || (data.data?.threadId ? `chat-${data.data.threadId}` : 'dream-jewels-notification'));
 
       const notificationOptions = {
-        body: notificationBody,
+        body: data.body || data.notification?.body || 'New notification',
         icon: '/pwa-192x192-v4.png',
         badge: '/pwa-192x192-v4.png',
         vibrate: [200, 100, 200],
         tag: msgTag,
         renotify: false,
         data: {
-          url: targetUrl,
-          badgeCount: !isNaN(badgeCount) ? badgeCount : undefined
+          url: data.url || data.data?.url || '/'
         }
       };
-
-      actions.push(self.registration.showNotification(notificationTitle, notificationOptions));
+      event.waitUntil(self.registration.showNotification(notificationTitle, notificationOptions));
+    } catch (err) {
+      console.warn('Push event fallback error:', err);
     }
-
-    return Promise.all(actions);
   });
 }
 
