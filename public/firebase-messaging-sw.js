@@ -29,78 +29,45 @@ if (messaging) {
   messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-    const notificationTitle = payload.notification?.title || payload.data?.title || 'Dream Jewels';
-    const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new update.';
     const badgeCount = parseInt(payload.data?.badgeCount || payload.data?.unreadCount, 10);
-    const targetUrl = payload.data?.url || '/';
-
-    const msgTag = payload.data?.messageId 
-      ? `chat-msg-${payload.data.messageId}` 
-      : (payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification'));
-
-    const notificationOptions = {
-      body: notificationBody,
-      icon: '/pwa-192x192-v4.png',
-      badge: '/pwa-192x192-v4.png',
-      vibrate: [200, 100, 200],
-      tag: msgTag,
-      renotify: false,
-      data: {
-        url: targetUrl,
-        badgeCount: !isNaN(badgeCount) ? badgeCount : undefined
-      }
-    };
-
-    const actions = [
-      self.registration.showNotification(notificationTitle, notificationOptions)
-    ];
+    const actions = [];
 
     // Set or update the app icon badge count on the device Home Screen
     if (!isNaN(badgeCount) && 'setAppBadge' in navigator) {
       actions.push(navigator.setAppBadge(badgeCount).catch(() => {}));
     }
 
+    // If the FCM message already contains a top-level notification object,
+    // the Firebase Web SDK automatically displays it using webpush.notification options.
+    // Calling self.registration.showNotification here would cause duplicate notifications.
+    if (!payload.notification) {
+      const notificationTitle = payload.data?.title || 'Dream Jewels';
+      const notificationBody = payload.data?.body || 'You have a new update.';
+      const targetUrl = payload.data?.url || '/';
+
+      const msgTag = payload.data?.messageId 
+        ? `chat-msg-${payload.data.messageId}` 
+        : (payload.data?.threadId ? `chat-${payload.data.threadId}` : (payload.data?.tag || 'dream-jewels-notification'));
+
+      const notificationOptions = {
+        body: notificationBody,
+        icon: '/pwa-192x192-v4.png',
+        badge: '/pwa-192x192-v4.png',
+        vibrate: [200, 100, 200],
+        tag: msgTag,
+        renotify: false,
+        data: {
+          url: targetUrl,
+          badgeCount: !isNaN(badgeCount) ? badgeCount : undefined
+        }
+      };
+
+      actions.push(self.registration.showNotification(notificationTitle, notificationOptions));
+    }
+
     return Promise.all(actions);
   });
 }
-
-// 2. Generic Push event fallback (for standard Web Push payloads)
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  try {
-    const data = event.data.json();
-    const notificationTitle = data.title || data.notification?.title || 'Dream Jewels';
-    const msgTag = data.messageId || data.data?.messageId
-      ? `chat-msg-${data.messageId || data.data?.messageId}`
-      : (data.tag || data.data?.tag || (data.data?.threadId ? `chat-${data.data.threadId}` : 'dream-jewels-notification'));
-
-    const notificationOptions = {
-      body: data.body || data.notification?.body || 'New notification',
-      icon: '/pwa-192x192-v4.png',
-      badge: '/pwa-192x192-v4.png',
-      vibrate: [200, 100, 200],
-      tag: msgTag,
-      renotify: false,
-      data: {
-        url: data.url || data.data?.url || '/'
-      }
-    };
-
-    const count = parseInt(data.badgeCount || data.data?.badgeCount, 10);
-
-    event.waitUntil(
-      Promise.all([
-        self.registration.showNotification(notificationTitle, notificationOptions),
-        !isNaN(count) && 'setAppBadge' in navigator 
-          ? navigator.setAppBadge(count).catch(() => {}) 
-          : Promise.resolve()
-      ])
-    );
-  } catch (err) {
-    console.warn('Push event payload parse fallback:', err);
-  }
-});
 
 // 3. User taps on the push notification banner
 self.addEventListener('notificationclick', (event) => {

@@ -399,16 +399,17 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
             currentUserIdLower === targetLower ||
             currentUsernameLower === targetLower ||
             currentEmailLower === targetLower ||
-            (targetLower.startsWith('customer-') && (targetLower.includes(currentUserIdLower) || targetLower.includes(currentUsernameLower))) ||
-            myRole === role
+            (targetLower.startsWith('customer-') && (targetLower.includes(currentUserIdLower) || targetLower.includes(currentUsernameLower)))
           )
           : myRole === role;
 
         const senderLower = (senderId || '').toLowerCase();
-        const isFromThisUser = !!senderId && !!currentUser?.id && (
-          senderLower === currentUserIdLower ||
-          senderLower === currentUsernameLower ||
-          senderLower === currentEmailLower
+        const isFromThisUser = !!senderId && (
+          (!!currentUser?.id && senderLower === currentUserIdLower) ||
+          (!!currentUser?.username && senderLower === currentUsernameLower) ||
+          (!!currentUser?.email && senderLower === currentEmailLower) ||
+          (myRole === 'admin' && (senderLower === 'admin' || senderLower === 'super-admin')) ||
+          (myRole === 'customer' && (senderLower === 'customer' || (currentUser?.name && senderLower === currentUser.name.toLowerCase())))
         );
 
         if (!isForThisUser || isFromThisUser) return;
@@ -462,6 +463,7 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
     try {
       const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
       const relevant = items.find((item) => {
+        if (item.type === 'chat') return false; // Chat notifications are alerted via FCM/push
         if (item.role !== myRole) return false;
         if (item.userId && currentUser?.id && item.userId !== currentUser.id) return false;
         return true;
@@ -545,60 +547,13 @@ export function ChatNotificationProvider({ children }: { children: React.ReactNo
         if (val) {
           const parsedThreads = parseThreadsFromState(val);
 
-          // Real-time message detection & single-fire notification for receiver
-          if (initialMessageSyncDoneRef.current) {
-            parsedThreads.forEach((thread) => {
-              (thread.messages || []).forEach((msg) => {
-                if (isMessageAlreadyNotified(msg.id)) return;
-
-                const myRole = currentUser?.role === 'super-admin' ? 'admin' : currentUser?.role;
-                const myId = (currentUser?.id || '').toLowerCase();
-                const myName = (currentUser?.name || '').toLowerCase();
-                const myEmail = (currentUser?.email || '').toLowerCase();
-                const threadCustId = (thread.customerId || '').toLowerCase();
-                const threadCustName = (thread.customerName || '').toLowerCase();
-
-                let isForMe = false;
-                if (myRole === 'admin') {
-                  isForMe = msg.from === 'customer' || msg.from === 'designer';
-                } else if (myRole === 'customer') {
-                  const isCustomerMatch =
-                    !myId ||
-                    threadCustId === myId ||
-                    (myEmail && threadCustId === myEmail) ||
-                    (myName && threadCustName === myName) ||
-                    thread.id === `customer-${currentUser?.id}` ||
-                    (currentUser?.id && thread.id.includes(currentUser.id));
-
-                  isForMe = (msg.from === 'admin' || msg.from === 'designer') && isCustomerMatch;
-                } else if (myRole === 'designer') {
-                  isForMe = msg.from === 'admin' &&
-                    (!myId || threadCustName === myId || (myName && threadCustName === myName) || (currentUser?.id && thread.id.includes(currentUser.id)));
-                }
-
-                markMessageAsNotified(msg.id);
-
-                if (isForMe) {
-                  const notifTitle = msg.senderName || (myRole === 'customer' ? 'Dream Jewels Support' : 'Customer Message');
-                  const previewText = msg.text || (msg.attachments && msg.attachments.length > 0 ? 'Sent an attachment' : 'New message');
-                  const targetUrl = myRole === 'admin'
-                    ? `/dashboard/admin/chats?thread=${encodeURIComponent(thread.id)}`
-                    : `/dashboard/customer/chat?thread=${encodeURIComponent(thread.id)}`;
-
-                  showLocalNotification(notifTitle, {
-                    body: previewText,
-                    tag: `chat-msg-${msg.id}`,
-                    data: {
-                      threadId: thread.id,
-                      messageId: msg.id,
-                      url: targetUrl,
-                    },
-                  });
-                }
-              });
-            });
-          } else {
-            // First database snapshot: register existing message IDs without alerting
+          // On first snapshot, register all existing message IDs so late FCM pushes
+          // don't re-fire for already-seen messages. After that, thread state updates
+          // (setThreads below) handle unread counts and badge increments.
+          // OS banners are handled exclusively by FCM (registerForegroundPushListener
+          // for foreground, service worker for background) — showing them here too
+          // would produce duplicate notifications.
+          if (!initialMessageSyncDoneRef.current) {
             parsedThreads.forEach((thread) => {
               (thread.messages || []).forEach((msg) => {
                 markMessageAsNotified(msg.id);
