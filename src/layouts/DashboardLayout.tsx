@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
+import { BottomNav } from '../components/layout/BottomNav';
 import { useRole } from '../hooks/useRole';
 import { useAuth } from '../hooks/useAuth';
 import { useChatNotification } from '../context/ChatNotificationContext';
 import { setPwaAppBadge, requestBadgePermission } from '../utils/pwaBadge';
 
 /**
- * DashboardLayout — the SaaS shell: sidebar + sticky header + scrollable content.
+ * DashboardLayout — the SaaS shell: sidebar + sticky header + scrollable content + mobile bottom nav.
  * All authenticated dashboard pages render inside <Outlet />.
  */
 export function DashboardLayout() {
@@ -18,12 +19,12 @@ export function DashboardLayout() {
   const { getChatUnreadCount, getUnreadCount, orders } = useChatNotification();
   const isCustomer = role === 'customer';
 
-  // Request notification/badging permission on mount if running as PWA
+  // Request notification/badging permission on mount if running as installed app
   useEffect(() => {
     requestBadgePermission();
   }, []);
 
-  // Automatically update native PWA Home Screen Icon Badge (iOS / Android / Desktop)
+  // Automatically update native Home Screen Icon Badge (iOS / Android / Desktop)
   useEffect(() => {
     const targetRole = role === 'super-admin' ? 'admin' : (role ?? 'customer');
     const notifUnread = getUnreadCount(targetRole as 'customer' | 'admin' | 'designer', user?.id);
@@ -36,7 +37,7 @@ export function DashboardLayout() {
   }, [role, user?.id, getChatUnreadCount, getUnreadCount, orders]);
 
   return (
-    <div className="flex h-[100dvh] bg-slate-50 overflow-hidden">
+    <div className="flex h-[100dvh] bg-slate-50 overflow-hidden relative">
       {/* Sidebar - only for admin & super-admin */}
       {!isCustomer && (
         <Sidebar
@@ -50,10 +51,13 @@ export function DashboardLayout() {
         {/* Sticky header */}
         <Header onMenuClick={() => setMobileMenuOpen(true)} isCustomer={isCustomer} />
 
-        {/* Scrollable page content */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Scrollable page content with mobile bottom spacing */}
+        <div className="flex-1 overflow-y-auto pb-16 md:pb-0">
           <Outlet />
         </div>
+
+        {/* Mobile-first bottom navigation bar */}
+        <BottomNav onMenuClick={() => setMobileMenuOpen(true)} />
       </div>
     </div>
   );

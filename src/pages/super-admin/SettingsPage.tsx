@@ -227,7 +227,7 @@ export function SettingsPage() {
               </div>
               <div>
                 <h2 className="font-semibold text-slate-800">Notification Testing Suite</h2>
-                <p className="text-xs text-slate-500">Test all notification triggers, counters, audio chimes, and PWA icon badging</p>
+                <p className="text-xs text-slate-500">Test all notification triggers, counters, audio chimes, and app icon badging</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

@@ -114,12 +114,9 @@ export function LoginPage() {
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. admin or customer1"
+                placeholder="Enter your username"
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-base sm:text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
               />
-              <p className="text-[11px] text-slate-400 mt-1">
-                Test username: <span className="font-mono text-slate-600 font-semibold">admin</span> or <span className="font-mono text-slate-600 font-semibold">customer1</span>
-              </p>
             </div>
 
             {/* Password */}
@@ -134,7 +131,7 @@ export function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password (123456)"
+                  placeholder="Enter your password"
                   className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-base sm:text-sm outline-none focus:border-emerald-400 focus:bg-white focus:ring-3 focus:ring-emerald-100 transition-all"
                 />
                 <button
@@ -146,9 +143,6 @@ export function LoginPage() {
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Test password: <span className="font-mono text-slate-600 font-semibold">123456</span>
-              </p>
             </div>
 
             {/* Error message */}

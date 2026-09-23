@@ -105,11 +105,11 @@ function NotificationBell() {
               </button>
             </div>
 
-            {/* PWA Device Push & Icon Badge Prompt / Status */}
+            {/* Device Push & Notification Status */}
             <div className="bg-slate-50/90 px-4 py-2 border-b border-slate-100 flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5 text-slate-600 font-medium">
                 <span className={`w-2 h-2 rounded-full ${pushPermission === 'granted' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                <span className="truncate">{pushPermission === 'granted' ? 'PWA Badges & Push Active' : 'Device Push & Badges'}</span>
+                <span className="truncate">{pushPermission === 'granted' ? 'Push Notifications Active' : 'Enable Push Notifications'}</span>
               </div>
               {pushPermission !== 'granted' && (
                 <button
