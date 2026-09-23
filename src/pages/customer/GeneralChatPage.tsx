@@ -327,7 +327,7 @@ export function GeneralChatPage() {
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-slate-900 text-sm truncate">
-                  {activeThread?.orderName ? `Order: ${activeThread.orderName}` : 'Dream Jewels Support Team'}
+                  {activeThread?.orderName ? activeThread.orderName.replace(/^custom\s+/i, '').trim() : 'Dream Jewels Support Team'}
                 </p>
                 <p className="text-xs flex items-center gap-1.5 text-emerald-600 font-medium">
                   <span className="w-2 h-2 rounded-full inline-block bg-emerald-500 animate-pulse" />
